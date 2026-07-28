@@ -71,3 +71,4 @@ Steps 1–3 are safe to build before the company's VAT and Vipps agreements are 
 No production imagery exists yet. Every image slot in the prototype is a placeholder. The shop
 needs, per design: a flat print file (transparent PNG, 4500×5400 px, 300 dpi for Gelato), a
 generated mockup on the shirt, and optionally one model photo per collection.
+"# fjord-cotton" 

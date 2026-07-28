@@ -1,0 +1,52 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env files (never commit secrets — service role key, Dintero/Gelato keys)
+.env
+.env*.local
+.env.local
+
+# typescript
+*.tsbuildinfo
+
+# supabase local
+/supabase/.branches
+/supabase/.temp
+
+
+# Local dev environment. Gitignored. Fill in Supabase values to enable uploads.
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+SUPABASE_PRINT_BUCKET=print-files
+SUPABASE_MOCKUP_BUCKET=mockups
+
+# Change this. Sent as x-admin-token from the admin UI.
+ADMIN_TOKEN=dev-admin-token
+
+VAT_REGISTERED=false
+
+# Dintero + Gelato blank → mock mode (test the flow without onboarding).
+CRON_SECRET=dev-cron-secret

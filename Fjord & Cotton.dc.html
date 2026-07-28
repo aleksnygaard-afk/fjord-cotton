@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Archivo:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#f7f5f0; color:#16150f; -webkit-font-smoothing:antialiased; }
+  * { box-sizing:border-box; }
+  a { color:#16150f; text-decoration:none; }
+  a:hover { color:#7a5c2e; }
+  ::selection { background:#e4dbc8; }
+</style>
+</helmet>
+
+<div style="font-family:Archivo, 'Helvetica Neue', Helvetica, sans-serif; background:#f7f5f0; min-height:100vh; display:flex; flex-direction:column">
+
+  <div style="background:#16150f; color:#f7f5f0; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; padding:9px 0; display:flex; justify-content:center; gap:40px">
+    <span data-en="Free shipping over 599 kr">Fri frakt over 599 kr</span>
+    <span data-en="Printed and shipped from Norway">Trykkes og sendes fra Norge</span>
+    <span data-en="14-day right of return">14 dagers angrerett</span>
+  </div>
+
+  <header style="position:sticky; top:0; z-index:40; background:rgba(247,245,240,0.94); backdrop-filter:blur(10px); border-bottom:1px solid #ddd7c9">
+    <div style="max-width:1360px; margin:0 auto; padding:18px 32px; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:32px">
+      <nav style="display:flex; gap:26px; font-size:13px; letter-spacing:0.03em">
+        <a href="#" onClick="{{ goCatalog }}" data-en="All designs">Alle design</a>
+        <a href="#" onClick="{{ goNew }}" data-en="New today">Nytt i dag</a>
+        <a href="#" onClick="{{ goCatalog }}" data-en="Collections">Kolleksjoner</a>
+      </nav>
+      <a href="#" onClick="{{ goHome }}" style="font-family:'Instrument Serif', Georgia, serif; font-size:30px; letter-spacing:-0.01em; white-space:nowrap; text-align:center">Fjord &amp; Cotton</a>
+      <div style="display:flex; gap:18px; align-items:center; justify-content:flex-end">
+        <div style="display:flex; align-items:center; gap:8px; border:1px solid #ddd7c9; background:#fffdf8; border-radius:2px; padding:8px 12px; width:230px">
+          <div style="width:11px; height:11px; border:1.5px solid #8b8574; border-radius:50%; flex:none"></div>
+          <input value="{{ query }}" onChange="{{ onQuery }}" placeholder="Søk i arkivet" data-en-placeholder="Search the archive" style="border:none; outline:none; background:transparent; font-family:inherit; font-size:12px; width:100%; color:#16150f">
+        </div>
+        <button onClick="{{ toggleLang }}" style="font-family:inherit; font-size:11px; letter-spacing:0.12em; background:none; border:1px solid #ddd7c9; border-radius:2px; padding:8px 10px; cursor:pointer; color:#16150f">{{ langLabel }}</button>
+        <button onClick="{{ goCart }}" style="font-family:inherit; font-size:12px; background:#16150f; color:#f7f5f0; border:none; border-radius:2px; padding:10px 16px; cursor:pointer; display:flex; gap:8px" style-hover="background:#33301f">
+          <span data-en="Cart">Handlekurv</span><span>{{ cartCount }}</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+  <main>
+    <section style="max-width:1360px; margin:0 auto; padding:72px 32px 56px; display:grid; grid-template-columns:1.05fr 0.95fr; gap:64px; align-items:end">
+      <div>
+        <div style="font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color:#7a7461; margin-bottom:28px" data-en="Issue 01 — Summer 2026">Utgave 01 — Sommer 2026</div>
+        <h1 style="font-family:'Instrument Serif', Georgia, serif; font-size:104px; line-height:0.94; letter-spacing:-0.025em; margin:0 0 28px; text-wrap:balance" data-en="Ten new shirts. Every single day.">Ti nye t-skjorter. Hver eneste dag.</h1>
+        <p style="font-size:16px; line-height:1.6; max-width:460px; color:#46422f; margin:0 0 36px; text-wrap:pretty" data-en="An ever-growing archive of original prints — pressed on heavy combed cotton and shipped across the Nordics within three days.">Et arkiv som vokser hver dag med originale trykk — presset på tung kammet bomull og sendt i hele Norden på tre dager.</p>
+        <div style="display:flex; gap:14px">
+          <button onClick="{{ goCatalog }}" style="font-family:inherit; font-size:13px; letter-spacing:0.04em; background:#16150f; color:#f7f5f0; border:none; padding:16px 30px; border-radius:2px; cursor:pointer" style-hover="background:#33301f"><span data-en="Browse the archive">Se hele arkivet</span></button>
+          <button onClick="{{ goNew }}" style="font-family:inherit; font-size:13px; letter-spacing:0.04em; background:none; color:#16150f; border:1px solid #16150f; padding:16px 30px; border-radius:2px; cursor:pointer" style-hover="background:#ebe6da"><span data-en="Today's ten">Dagens ti</span></button>
+        </div>
+      </div>
+      <div style="aspect-ratio:4/5; background:repeating-linear-gradient(135deg,#e8e2d3 0 12px,#ded7c5 12px 24px); display:flex; align-items:flex-end; padding:20px; border-radius:2px">
+        <span style="font-family:ui-monospace, 'SF Mono', Menlo, monospace; font-size:11px; color:#6d6653; background:#f7f5f0; padding:6px 10px">hero — model wearing shirt, 1200×1500</span>
+      </div>
+    </section>
+
+    <section style="border-top:1px solid #ddd7c9; border-bottom:1px solid #ddd7c9; background:#fffdf8">
+      <div style="max-width:1360px; margin:0 auto; padding:20px 32px; display:flex; justify-content:space-between; align-items:center; font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:#6d6653">
+        <span>{{ publishedLabel }}</span>
+        <span>XS–3XL</span>
+        <span data-en="6 shirt colours">6 skjortefarger</span>
+        <span data-en="Combed cotton, 220 g">Kammet bomull, 220 g</span>
+        <span data-en="Vipps · Klarna · Card">Vipps · Klarna · Kort</span>
+      </div>
+    </section>
+
+    <section style="max-width:1360px; margin:0 auto; padding:64px 32px 24px; display:flex; justify-content:space-between; align-items:baseline">
+      <h2 style="font-family:'Instrument Serif', Georgia, serif; font-size:44px; margin:0; letter-spacing:-0.02em" data-en="New today">Nytt i dag</h2>
+      <a href="#" onClick="{{ goCatalog }}" style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; border-bottom:1px solid #16150f; padding-bottom:2px">{{ allLabel }}</a>
+    </section>
+    <section style="max-width:1360px; margin:0 auto; padding:0 32px 72px; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:24px">
+      <sc-for list="{{ todayList }}" as="d" hint-placeholder-count="5">
+        <div onClick="{{ d.open }}" style="cursor:pointer">
+          <div style="aspect-ratio:4/5; background:{{ d.bg }}; display:flex; align-items:center; justify-content:center; position:relative; border-radius:2px; overflow:hidden">
+            <div style="width:52%; aspect-ratio:1; background:repeating-linear-gradient(45deg,rgba(22,21,15,0.13) 0 7px,transparent 7px 14px); border:1px solid rgba(22,21,15,0.18); display:flex; align-items:center; justify-content:center">
+              <span style="font-family:ui-monospace,Menlo,monospace; font-size:10px; color:#4a4535">{{ d.slug }}</span>
+            </div>
+            <span style="position:absolute; top:10px; left:10px; font-size:10px; letter-spacing:0.12em; text-transform:uppercase; background:#16150f; color:#f7f5f0; padding:4px 8px">Ny</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; gap:10px; margin-top:12px; font-size:13px">
+            <span style="font-family:'Instrument Serif',Georgia,serif; font-size:19px; line-height:1.2">{{ d.title }}</span>
+            <span style="color:#6d6653; white-space:nowrap">{{ d.priceLabel }}</span>
+          </div>
+          <div style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:#8b8574; margin-top:4px">{{ d.theme }}</div>
+        </div>
+      </sc-for>
+    </section>
+
+    <section style="background:#16150f; color:#f7f5f0">
+      <div style="max-width:1360px; margin:0 auto; padding:80px 32px; display:grid; grid-template-columns:repeat(3,1fr); gap:56px">
+        <div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:40px; margin-bottom:14px">01</div>
+          <h3 style="font-size:14px; letter-spacing:0.08em; text-transform:uppercase; margin:0 0 10px" data-en="Printed on demand">Trykkes på bestilling</h3>
+          <p style="font-size:14px; line-height:1.65; color:#b8b2a0; margin:0" data-en="Nothing sits in a warehouse. Your shirt is pressed the day you order it, so we never overproduce.">Ingenting ligger på lager. Skjorta di presses samme dag du bestiller, så vi overproduserer aldri.</p>
+        </div>
+        <div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:40px; margin-bottom:14px">02</div>
+          <h3 style="font-size:14px; letter-spacing:0.08em; text-transform:uppercase; margin:0 0 10px" data-en="Pay the Norwegian way">Betal som du vil</h3>
+          <p style="font-size:14px; line-height:1.65; color:#b8b2a0; margin:0" data-en="Vipps in two taps, Klarna in four instalments, or card. Prices include 25 % VAT.">Vipps på to trykk, Klarna på fire delbetalinger, eller kort. Prisene inkluderer 25 % mva.</p>
+        </div>
+        <div>
+          <div style="font-family:'Instrument Serif',Georgia,serif; font-size:40px; margin-bottom:14px">03</div>
+          <h3 style="font-size:14px; letter-spacing:0.08em; text-transform:uppercase; margin:0 0 10px" data-en="Three days, door to door">Tre dager, dør til dør</h3>
+          <p style="font-size:14px; line-height:1.65; color:#b8b2a0; margin:0" data-en="Posten and Bring deliver to pick-up points across Norway, Sweden and Denmark.">Posten og Bring leverer til hentepunkt i hele Norge, Sverige og Danmark.</p>
+        </div>
+      </div>
+    </section>
+
+    <section style="max-width:1360px; margin:0 auto; padding:72px 32px">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:28px">
+        <h2 style="font-family:'Instrument Serif',Georgia,serif; font-size:44px; margin:0; letter-spacing:-0.02em" data-en="In season now">I sesong nå</h2>
+        <span style="font-size:12px; letter-spacing:0.1em; text-transform:uppercase; color:#8b8574" data-en="Seasons &amp; holidays">Årstider og høytider</span>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:24px">
+        <sc-for list="{{ collections }}" as="c" hint-placeholder-count="3">
+          <div onClick="{{ c.open }}" style="cursor:pointer; aspect-ratio:16/10; background:{{ c.bg }}; padding:26px; display:flex; flex-direction:column; justify-content:space-between; border-radius:2px" style-hover="filter:brightness(0.97)">
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:10px; color:#5a5442">{{ c.count }}</span>
+            <span style="font-family:'Instrument Serif',Georgia,serif; font-size:32px; line-height:1.05">{{ c.name }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </main>
+  </sc-if>
+
+  <sc-if value="{{ isCatalog }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:1360px; margin:0 auto; padding:44px 32px 80px; display:grid; grid-template-columns:216px 1fr; gap:48px; width:100%">
+    <aside style="align-self:start; position:sticky; top:104px">
+      <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:14px" data-en="Collection">Kolleksjon</div>
+      <div style="display:flex; flex-direction:column; gap:2px; margin-bottom:32px">
+        <sc-for list="{{ collFilters }}" as="c" hint-placeholder-count="8">
+          <button onClick="{{ c.pick }}" style="font-family:inherit; text-align:left; font-size:13px; padding:7px 10px; border:none; border-radius:2px; cursor:pointer; background:{{ c.bg }}; color:{{ c.fg }}; display:flex; justify-content:space-between">
+            <span>{{ c.label }}</span><span style="opacity:0.5">{{ c.count }}</span>
+          </button>
+        </sc-for>
+      </div>
+      <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:14px" data-en="Theme">Tema</div>
+      <div style="display:flex; flex-direction:column; gap:2px; margin-bottom:32px">
+        <sc-for list="{{ themeFilters }}" as="f" hint-placeholder-count="7">
+          <button onClick="{{ f.pick }}" style="font-family:inherit; text-align:left; font-size:13px; padding:7px 10px; border:none; border-radius:2px; cursor:pointer; background:{{ f.bg }}; color:{{ f.fg }}; display:flex; justify-content:space-between">
+            <span>{{ f.label }}</span><span style="opacity:0.5">{{ f.count }}</span>
+          </button>
+        </sc-for>
+      </div>
+      <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:14px" data-en="Shirt colour">Farge</div>
+      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:32px">
+        <sc-for list="{{ colorFilters }}" as="c" hint-placeholder-count="6">
+          <button onClick="{{ c.pick }}" title="{{ c.label }}" style="width:26px; height:26px; border-radius:50%; cursor:pointer; background:{{ c.hex }}; border:1px solid #c9c2b0; outline:{{ c.ring }}; outline-offset:2px"></button>
+        </sc-for>
+      </div>
+      <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:14px" data-en="Size">Størrelse</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:32px">
+        <sc-for list="{{ sizeFilters }}" as="s" hint-placeholder-count="6">
+          <button onClick="{{ s.pick }}" style="font-family:inherit; font-size:12px; padding:6px 10px; cursor:pointer; border:1px solid #c9c2b0; border-radius:2px; background:{{ s.bg }}; color:{{ s.fg }}">{{ s.label }}</button>
+        </sc-for>
+      </div>
+      <button onClick="{{ clearFilters }}" style="font-family:inherit; font-size:12px; background:none; border:none; padding:0; cursor:pointer; color:#7a5c2e; border-bottom:1px solid #7a5c2e" data-en="Clear all filters">Nullstill filtre</button>
+    </aside>
+
+    <div>
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:28px; border-bottom:1px solid #ddd7c9; padding-bottom:18px">
+        <h1 style="font-family:'Instrument Serif',Georgia,serif; font-size:40px; margin:0; letter-spacing:-0.02em">{{ catalogTitle }}</h1>
+        <span style="font-size:12px; color:#6d6653">{{ resultLabel }}</span>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:26px">
+        <sc-for list="{{ visibleList }}" as="d" hint-placeholder-count="12">
+          <div onClick="{{ d.open }}" style="cursor:pointer">
+            <div style="aspect-ratio:4/5; background:{{ d.bg }}; display:flex; align-items:center; justify-content:center; position:relative; border-radius:2px; overflow:hidden">
+              <div style="width:52%; aspect-ratio:1; background:repeating-linear-gradient(45deg,rgba(22,21,15,0.13) 0 7px,transparent 7px 14px); border:1px solid rgba(22,21,15,0.18); display:flex; align-items:center; justify-content:center">
+                <span style="font-family:ui-monospace,Menlo,monospace; font-size:10px; color:#4a4535">{{ d.slug }}</span>
+              </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:10px; margin-top:12px">
+              <span style="font-family:'Instrument Serif',Georgia,serif; font-size:19px; line-height:1.2">{{ d.title }}</span>
+              <span style="color:#6d6653; font-size:13px; white-space:nowrap">{{ d.priceLabel }}</span>
+            </div>
+            <div style="font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:#8b8574; margin-top:4px">{{ d.theme }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px solid #ddd7c9; background:#fffdf8; padding:64px 32px; text-align:center">
+          <p style="margin:0 0 20px; color:#6d6653; font-size:15px">{{ emptyLine }}</p>
+          <button onClick="{{ goCatalog }}" style="font-family:inherit; font-size:13px; background:#16150f; color:#f7f5f0; border:none; padding:14px 28px; border-radius:2px; cursor:pointer"><span data-en="Back to the archive">Tilbake til arkivet</span></button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ hasMore }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; justify-content:center; padding:56px 0 0">
+        <button onClick="{{ loadMore }}" style="font-family:inherit; font-size:13px; letter-spacing:0.04em; background:none; border:1px solid #16150f; padding:15px 40px; border-radius:2px; cursor:pointer" style-hover="background:#ebe6da"><span data-en="Load more">Last inn flere</span></button>
+      </div>
+      </sc-if>
+    </div>
+  </main>
+  </sc-if>
+
+  <sc-if value="{{ isProduct }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:1360px; margin:0 auto; padding:44px 32px 90px; width:100%">
+    <div style="font-size:12px; color:#8b8574; margin-bottom:26px"><a href="#" onClick="{{ goCatalog }}" data-en="Archive">Arkiv</a> / {{ current.theme }} / {{ current.title }}</div>
+    <div style="display:grid; grid-template-columns:1.15fr 1fr; gap:64px; align-items:start">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px">
+        <div style="grid-column:1/-1; aspect-ratio:1; background:{{ current.bg }}; display:flex; align-items:center; justify-content:center; border-radius:2px">
+          <div style="width:42%; aspect-ratio:1; background:repeating-linear-gradient(45deg,rgba(22,21,15,0.13) 0 8px,transparent 8px 16px); border:1px solid rgba(22,21,15,0.18); display:flex; align-items:center; justify-content:center">
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#4a4535">{{ current.slug }}</span>
+          </div>
+        </div>
+        <div style="aspect-ratio:1; background:repeating-linear-gradient(135deg,#e8e2d3 0 10px,#ded7c5 10px 20px); display:flex; align-items:flex-end; padding:14px">
+          <span style="font-family:ui-monospace,Menlo,monospace; font-size:10px; color:#6d6653; background:#f7f5f0; padding:4px 7px">model front</span>
+        </div>
+        <div style="aspect-ratio:1; background:repeating-linear-gradient(135deg,#e8e2d3 0 10px,#ded7c5 10px 20px); display:flex; align-items:flex-end; padding:14px">
+          <span style="font-family:ui-monospace,Menlo,monospace; font-size:10px; color:#6d6653; background:#f7f5f0; padding:4px 7px">print detail</span>
+        </div>
+      </div>
+
+      <div style="position:sticky; top:110px">
+        <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:12px">{{ current.theme }}</div>
+        <h1 style="font-family:'Instrument Serif',Georgia,serif; font-size:56px; line-height:1.02; letter-spacing:-0.02em; margin:0 0 14px">{{ current.title }}</h1>
+        <div style="font-size:20px; margin-bottom:6px">{{ current.priceLabel }}</div>
+        <div style="font-size:12px; color:#8b8574; margin-bottom:30px" data-en="Incl. 25 % VAT · free shipping over 599 kr">Inkl. 25 % mva · fri frakt over 599 kr</div>
+
+        <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:10px" data-en="Shirt colour">Farge</div>
+        <div style="display:flex; gap:10px; margin-bottom:26px">
+          <sc-for list="{{ colorFilters }}" as="c" hint-placeholder-count="6">
+            <button onClick="{{ c.select }}" title="{{ c.label }}" style="width:32px; height:32px; border-radius:50%; cursor:pointer; background:{{ c.hex }}; border:1px solid #c9c2b0; outline:{{ c.selRing }}; outline-offset:2px"></button>
+          </sc-for>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; margin-bottom:10px">
+          <span style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574" data-en="Size">Størrelse</span>
+          <a href="#" style="font-size:11px; color:#7a5c2e" data-en="Size guide">Størrelsesguide</a>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-bottom:30px">
+          <sc-for list="{{ sizeFilters }}" as="s" hint-placeholder-count="6">
+            <button onClick="{{ s.select }}" style="font-family:inherit; font-size:13px; padding:12px 0; cursor:pointer; border:1px solid #c9c2b0; border-radius:2px; background:{{ s.selBg }}; color:{{ s.selFg }}">{{ s.label }}</button>
+          </sc-for>
+        </div>
+
+        <button onClick="{{ addToCart }}" style="width:100%; font-family:inherit; font-size:14px; letter-spacing:0.04em; background:#16150f; color:#f7f5f0; border:none; padding:18px; border-radius:2px; cursor:pointer; margin-bottom:10px" style-hover="background:#33301f">{{ addLabel }}</button>
+        <button onClick="{{ buyNow }}" style="width:100%; font-family:inherit; font-size:14px; letter-spacing:0.04em; background:#ff5b24; color:#fff; border:none; padding:18px; border-radius:2px; cursor:pointer; margin-bottom:26px" style-hover="filter:brightness(0.94)"><span data-en="Express checkout with Vipps">Hurtigkjøp med Vipps</span></button>
+
+        <div style="border-top:1px solid #ddd7c9; padding-top:22px; font-size:13px; line-height:1.7; color:#46422f">
+          <p style="margin:0 0 14px" data-en="220 g combed cotton, unisex fit. Water-based direct-to-garment print that stays soft after washing.">220 g kammet bomull, unisex passform. Vannbasert DTG-trykk som holder seg mykt etter vask.</p>
+          <div style="display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid #e6e0d2"><span data-en="Delivery">Levering</span><span style="color:#8b8574">2–4 <span data-en="working days">virkedager</span></span></div>
+          <div style="display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid #e6e0d2"><span data-en="Returns">Retur</span><span style="color:#8b8574" data-en="14 days, free">14 dager, gratis</span></div>
+          <div style="display:flex; justify-content:space-between; padding:8px 0; border-top:1px solid #e6e0d2"><span data-en="Printed in">Trykkes i</span><span style="color:#8b8574">Oslo</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  </sc-if>
+
+  <sc-if value="{{ isCart }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:1080px; margin:0 auto; padding:56px 32px 90px; width:100%">
+    <h1 style="font-family:'Instrument Serif',Georgia,serif; font-size:52px; margin:0 0 32px; letter-spacing:-0.02em" data-en="Cart">Handlekurv</h1>
+    <sc-if value="{{ cartEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="border:1px solid #ddd7c9; background:#fffdf8; padding:56px; text-align:center">
+        <p style="margin:0 0 20px; color:#6d6653" data-en="Your cart is empty.">Handlekurven er tom.</p>
+        <button onClick="{{ goCatalog }}" style="font-family:inherit; font-size:13px; background:#16150f; color:#f7f5f0; border:none; padding:14px 28px; border-radius:2px; cursor:pointer"><span data-en="Browse designs">Se design</span></button>
+      </div>
+    </sc-if>
+    <div style="display:grid; grid-template-columns:1fr 340px; gap:48px; align-items:start">
+      <div>
+        <sc-for list="{{ cart }}" as="line" hint-placeholder-count="2">
+          <div style="display:grid; grid-template-columns:86px 1fr auto; gap:20px; align-items:center; padding:20px 0; border-bottom:1px solid #e6e0d2">
+            <div style="aspect-ratio:4/5; background:{{ line.bg }}; border-radius:2px"></div>
+            <div>
+              <div style="font-family:'Instrument Serif',Georgia,serif; font-size:22px">{{ line.title }}</div>
+              <div style="font-size:12px; color:#8b8574; margin-top:4px">{{ line.variant }}</div>
+              <button onClick="{{ line.remove }}" style="font-family:inherit; font-size:12px; background:none; border:none; padding:6px 0 0; cursor:pointer; color:#7a5c2e"><span data-en="Remove">Fjern</span></button>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:15px">{{ line.total }}</div>
+              <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-top:8px">
+                <button onClick="{{ line.dec }}" style="font-family:inherit; width:26px; height:26px; border:1px solid #c9c2b0; background:none; cursor:pointer; border-radius:2px">−</button>
+                <span style="font-size:13px; width:16px; text-align:center">{{ line.qty }}</span>
+                <button onClick="{{ line.inc }}" style="font-family:inherit; width:26px; height:26px; border:1px solid #c9c2b0; background:none; cursor:pointer; border-radius:2px">+</button>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="border:1px solid #ddd7c9; background:#fffdf8; padding:26px">
+        <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:10px"><span data-en="Subtotal">Delsum</span><span>{{ subtotal }}</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:10px"><span data-en="Shipping">Frakt</span><span>{{ shipping }}</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:13px; padding-bottom:14px; color:#8b8574"><span data-en="of which VAT (25 %)">herav mva (25 %)</span><span>{{ vat }}</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:19px; border-top:1px solid #ddd7c9; padding-top:14px; margin-bottom:20px"><span data-en="Total">Totalt</span><span>{{ total }}</span></div>
+        <button onClick="{{ goCheckout }}" style="width:100%; font-family:inherit; font-size:14px; background:#16150f; color:#f7f5f0; border:none; padding:16px; border-radius:2px; cursor:pointer"><span data-en="Go to checkout">Til kassen</span></button>
+        <div style="display:flex; gap:8px; justify-content:center; margin-top:16px; font-size:10px; letter-spacing:0.08em; color:#8b8574; text-transform:uppercase">Vipps · Klarna · Visa · Apple Pay</div>
+      </div>
+    </div>
+  </main>
+  </sc-if>
+
+  <sc-if value="{{ isCheckout }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:1080px; margin:0 auto; padding:56px 32px 90px; display:grid; grid-template-columns:1fr 340px; gap:48px; align-items:start; width:100%">
+    <div>
+      <h1 style="font-family:'Instrument Serif',Georgia,serif; font-size:52px; margin:0 0 34px; letter-spacing:-0.02em" data-en="Checkout">Kassen</h1>
+
+      <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:14px" data-en="1 — Contact">1 — Kontakt</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:34px">
+        <input placeholder="E-post" data-en-placeholder="Email" style="grid-column:1/-1; font-family:inherit; font-size:14px; padding:14px; border:1px solid #ddd7c9; background:#fffdf8; border-radius:2px; outline:none">
+        <input placeholder="Fornavn" data-en-placeholder="First name" style="font-family:inherit; font-size:14px; padding:14px; border:1px solid #ddd7c9; background:#fffdf8; border-radius:2px; outline:none">
+        <input placeholder="Etternavn" data-en-placeholder="Last name" style="font-family:inherit; font-size:14px; padding:14px; border:1px solid #ddd7c9; background:#fffdf8; border-radius:2px; outline:none">
+        <input placeholder="Gateadresse" data-en-placeholder="Street address" style="grid-column:1/-1; font-family:inherit; font-size:14px; padding:14px; border:1px solid #ddd7c9; background:#fffdf8; border-radius:2px; outline:none">
+        <input placeholder="Postnummer" data-en-placeholder="Postcode" style="font-family:inherit; font-size:14px; padding:14px; border:1px solid #ddd7c9; background:#fffdf8; border-radius:2px; outline:none">
+        <input placeholder="Poststed" data-en-placeholder="City" style="font-family:inherit; font-size:14px; padding:14px; border:1px solid #ddd7c9; background:#fffdf8; border-radius:2px; outline:none">
+        <select style="grid-column:1/-1; font-family:inherit; font-size:14px; padding:14px; border:1px solid #ddd7c9; background:#fffdf8; border-radius:2px; outline:none">
+          <option data-en="Norway">Norge</option><option data-en="Sweden">Sverige</option><option data-en="Denmark">Danmark</option><option data-en="Finland">Finland</option>
+        </select>
+      </div>
+
+      <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:14px" data-en="2 — Delivery">2 — Levering</div>
+      <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:34px">
+        <sc-for list="{{ shippingOptions }}" as="o" hint-placeholder-count="3">
+          <button onClick="{{ o.pick }}" style="font-family:inherit; text-align:left; display:flex; justify-content:space-between; align-items:center; gap:16px; padding:16px; cursor:pointer; background:#fffdf8; border:1px solid {{ o.border }}; border-radius:2px">
+            <span style="display:flex; flex-direction:column; gap:3px">
+              <span style="font-size:14px">{{ o.name }}</span>
+              <span style="font-size:12px; color:#8b8574">{{ o.eta }}</span>
+            </span>
+            <span style="font-size:14px">{{ o.price }}</span>
+          </button>
+        </sc-for>
+      </div>
+
+      <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:14px" data-en="3 — Payment">3 — Betaling</div>
+      <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:24px">
+        <sc-for list="{{ paymentOptions }}" as="p" hint-placeholder-count="4">
+          <button onClick="{{ p.pick }}" style="font-family:inherit; text-align:left; display:flex; justify-content:space-between; align-items:center; gap:16px; padding:16px; cursor:pointer; background:#fffdf8; border:1px solid {{ p.border }}; border-radius:2px">
+            <span style="display:flex; flex-direction:column; gap:3px">
+              <span style="font-size:14px; display:flex; align-items:center; gap:10px"><span style="width:34px; height:20px; border-radius:2px; background:{{ p.chip }}"></span>{{ p.name }}</span>
+              <span style="font-size:12px; color:#8b8574">{{ p.note }}</span>
+            </span>
+            <span style="font-size:12px; color:#8b8574">{{ p.meta }}</span>
+          </button>
+        </sc-for>
+      </div>
+
+      <label style="display:flex; gap:10px; font-size:12px; color:#6d6653; line-height:1.6; margin-bottom:24px">
+        <input type="checkbox" style="margin-top:2px">
+        <span data-en="I accept the terms of sale and have read the privacy policy. As a consumer you have a 14-day right of withdrawal under the Norwegian Right of Withdrawal Act.">Jeg godtar salgsbetingelsene og har lest personvernerklæringen. Som forbruker har du 14 dagers angrerett etter angrerettloven.</span>
+      </label>
+      <button onClick="{{ placeOrder }}" style="width:100%; font-family:inherit; font-size:15px; background:#16150f; color:#f7f5f0; border:none; padding:19px; border-radius:2px; cursor:pointer">{{ payLabel }}</button>
+      <div style="text-align:center; font-size:11px; color:#8b8574; margin-top:14px">{{ orderNote }}</div>
+    </div>
+
+    <div style="border:1px solid #ddd7c9; background:#fffdf8; padding:26px; position:sticky; top:110px">
+      <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:16px" data-en="Order">Ordre</div>
+      <sc-for list="{{ cart }}" as="line" hint-placeholder-count="2">
+        <div style="display:flex; gap:12px; align-items:center; padding-bottom:14px">
+          <div style="width:44px; aspect-ratio:4/5; background:{{ line.bg }}; border-radius:2px; flex:none"></div>
+          <div style="flex:1; font-size:13px; line-height:1.4">{{ line.title }}<div style="color:#8b8574; font-size:11px">{{ line.variant }}</div></div>
+          <div style="font-size:13px">{{ line.total }}</div>
+        </div>
+      </sc-for>
+      <div style="display:flex; justify-content:space-between; font-size:13px; border-top:1px solid #ddd7c9; padding-top:14px"><span data-en="Subtotal">Delsum</span><span>{{ subtotal }}</span></div>
+      <div style="display:flex; justify-content:space-between; font-size:13px; padding-top:8px"><span data-en="Shipping">Frakt</span><span>{{ shipping }}</span></div>
+      <div style="display:flex; justify-content:space-between; font-size:13px; padding-top:8px; color:#8b8574"><span data-en="of which VAT">herav mva</span><span>{{ vat }}</span></div>
+      <div style="display:flex; justify-content:space-between; font-size:19px; border-top:1px solid #ddd7c9; margin-top:14px; padding-top:14px"><span data-en="Total">Totalt</span><span>{{ total }}</span></div>
+    </div>
+  </main>
+  </sc-if>
+
+  <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+  <main style="max-width:640px; margin:0 auto; padding:110px 32px 140px; text-align:center; width:100%">
+    <div style="font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color:#8b8574; margin-bottom:20px" data-en="Order confirmed">Ordre bekreftet</div>
+    <h1 style="font-family:'Instrument Serif',Georgia,serif; font-size:64px; line-height:1; margin:0 0 20px; letter-spacing:-0.02em" data-en="Thank you.">Takk skal du ha.</h1>
+    <p style="font-size:15px; line-height:1.7; color:#46422f; margin:0 0 34px" data-en="A receipt is on its way to your inbox. We press your shirt today and hand it to Bring tomorrow morning.">Kvitteringen er på vei til innboksen din. Vi presser skjorta i dag og leverer den til Bring i morgen tidlig.</p>
+    <div style="font-family:ui-monospace,Menlo,monospace; font-size:13px; border:1px solid #ddd7c9; background:#fffdf8; padding:16px; margin-bottom:34px">{{ orderId }}</div>
+    <button onClick="{{ goHome }}" style="font-family:inherit; font-size:13px; background:#16150f; color:#f7f5f0; border:none; padding:15px 32px; border-radius:2px; cursor:pointer"><span data-en="Back to the shop">Tilbake til butikken</span></button>
+  </main>
+  </sc-if>
+
+  <footer style="margin-top:auto; border-top:1px solid #ddd7c9; background:#fffdf8">
+    <div style="max-width:1360px; margin:0 auto; padding:64px 32px 28px; display:grid; grid-template-columns:1.4fr repeat(3,1fr); gap:48px">
+      <div>
+        <div style="font-family:'Instrument Serif',Georgia,serif; font-size:28px; margin-bottom:12px">Fjord &amp; Cotton</div>
+        <p style="font-size:13px; line-height:1.65; color:#6d6653; margin:0 0 14px; max-width:280px" data-en="Original prints on heavy combed cotton. New designs published every day.">Originale trykk på tung kammet bomull. Nye design publisert hver dag.</p>
+        <div style="font-size:12px; color:#8b8574; line-height:1.7">Nygård Multiservice<br>Org.nr 925 714 089<br>Norge</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:9px; font-size:13px">
+        <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:5px" data-en="Shop">Butikk</div>
+        <a href="#" onClick="{{ goCatalog }}" data-en="All designs">Alle design</a>
+        <a href="#" onClick="{{ goNew }}" data-en="New today">Nytt i dag</a>
+        <a href="#" data-en="Size guide">Størrelsesguide</a>
+        <a href="#" data-en="Gift cards">Gavekort</a>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:9px; font-size:13px">
+        <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:5px" data-en="Customer service">Kundeservice</div>
+        <a href="#" data-en="Shipping &amp; delivery">Frakt og levering</a>
+        <a href="#" data-en="Returns (angrerett)">Angrerett og retur</a>
+        <a href="#" data-en="Terms of sale">Salgsbetingelser</a>
+        <a href="#" data-en="Privacy (GDPR)">Personvern (GDPR)</a>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:9px; font-size:13px">
+        <div style="font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#8b8574; margin-bottom:5px" data-en="Contact">Kontakt</div>
+        <a href="mailto:hei@fjordcotton.no">hei@fjordcotton.no</a>
+        <span style="color:#6d6653">Man–fre 09–16</span>
+      </div>
+    </div>
+    <div style="max-width:1360px; margin:0 auto; padding:0 32px 40px; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#8b8574; letter-spacing:0.06em">
+      <span>© 2026 Nygård Multiservice · Fjord &amp; Cotton</span>
+      <span>Vipps · Klarna · Visa · Mastercard · Apple Pay · Google Pay</span>
+    </div>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;dailyDrop&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:1,&quot;max&quot;:30,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Catalog&quot;},&quot;freeShipThreshold&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:599,&quot;min&quot;:0,&quot;max&quot;:1500,&quot;step&quot;:50,&quot;unit&quot;:&quot;kr&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Commerce&quot;}}">
+const THEMES = [
+  ["Natur", "Nature"], ["Typografi", "Typography"], ["Retro", "Retro"],
+  ["Humor", "Humour"], ["Byliv", "City"], ["Abstrakt", "Abstract"], ["Musikk", "Music"]
+];
+const TITLES = [
+  "Nordlys", "Midnattssol", "Kaffe Først", "Fjellrev", "Bare Rolig", "Havbris",
+  "Tåkeheim", "Solverv", "Bygderomantikk", "Nattbuss", "Stille Vann", "Storm i P4",
+  "Villmark", "Ekko", "Sildesalat", "Frostrøyk", "Bålkos", "Grå Mandag",
+  "Blåtime", "Hyttetur", "Regnjakke", "Skjærgård", "Lavvo", "Snøkrystall",
+  "Brygga", "Fisketur", "Sommernatt", "Vinterferie", "Trikken", "Bokhylle",
+  "Klippfisk", "Elgjakt", "Solnedgang", "Gatelys", "Skogsti", "Havn"
+];
+const BGS = ["#e9e3d4", "#ded9cb", "#e4e0d2", "#dfe2dc", "#e7e0d8", "#dcdcd4", "#e6e2d0", "#e1dcd0"];
+const COLORS = [
+  ["Hvit", "White", "#f4f2ec"], ["Sort", "Black", "#1a1a18"], ["Sand", "Sand", "#d8cdb6"],
+  ["Salvie", "Sage", "#a9b3a1"], ["Marine", "Navy", "#2a3446"], ["Rust", "Rust", "#a75c3c"]
+];
+const SIZES = ["XS", "S", "M", "L", "XL", "3XL"];
+// Seasonal / holiday collections. months = when the collection is featured on the home page.
+const COLLECTIONS = [
+  { key: "sommer", no: "Sommer", en: "Summer", months: [5, 6, 7], bg: "#dfe2dc" },
+  { key: "host", no: "Høst", en: "Autumn", months: [8, 9], bg: "#e7e0d8" },
+  { key: "halloween", no: "Halloween", en: "Halloween", months: [9, 10], bg: "#e2ddd0" },
+  { key: "jul", no: "Jul", en: "Christmas", months: [10, 11], bg: "#dcdcd4" },
+  { key: "nyttar", no: "Nyttår", en: "New Year", months: [11, 0], bg: "#e1dcd0" },
+  { key: "vinter", no: "Vinterferie", en: "Winter", months: [0, 1], bg: "#e4e0d2" },
+  { key: "paske", no: "Påske", en: "Easter", months: [2, 3], bg: "#e9e3d4" },
+  { key: "mai", no: "17. mai", en: "Constitution Day", months: [3, 4], bg: "#e6e2d0" }
+];
+// One collection per design, in the same order as TITLES.
+const COLL_OF = [
+  "sommer","sommer","sommer","host","sommer","sommer","host","sommer","sommer","sommer",
+  "host","host","host","halloween","host","vinter","host","host",
+  "vinter","sommer","host","sommer","sommer","vinter",
+  "sommer","sommer","sommer","vinter","host","jul",
+  "jul","host","sommer","host","host","sommer"
+];
+
+class Component extends DCLogic {
+  state = {
+    lang: "no", screen: "home", query: "", theme: null, coll: null, color: null, size: null,
+    onlyNew: false, limit: 16, current: 0, pColor: 0, pSize: 2,
+    cart: [], ship: 0, pay: 0, orderId: ""
+  };
+
+  componentDidMount() { this.applyLang(); }
+  componentDidUpdate() { this.applyLang(); }
+
+  applyLang() {
+    const en = this.state.lang === "en";
+    const root = document;
+    root.querySelectorAll("[data-en]").forEach(node => {
+      if (!node.dataset.no) node.dataset.no = node.textContent;
+      const next = en ? node.dataset.en : node.dataset.no;
+      if (node.textContent !== next) node.textContent = next;
+    });
+    root.querySelectorAll("[data-en-placeholder]").forEach(node => {
+      if (!node.dataset.noPlaceholder) node.dataset.noPlaceholder = node.placeholder;
+      const next = en ? node.dataset.enPlaceholder : node.dataset.noPlaceholder;
+      if (node.placeholder !== next) node.placeholder = next;
+    });
+  }
+
+  designs() {
+    if (this._d) return this._d;
+    this._d = TITLES.map((t, i) => ({
+      id: i, title: t, theme: THEMES[i % THEMES.length], coll: COLL_OF[i] || "sommer",
+      bg: BGS[i % BGS.length], slug: "design-" + String(i + 1).padStart(3, "0"),
+      price: 349 + (i % 4) * 30, isNew: i < (this.props.dailyDrop ?? 10)
+    }));
+    return this._d;
+  }
+
+  kr(n) { return n.toLocaleString("nb-NO") + " kr"; }
+  t(no, en) { return this.state.lang === "en" ? en : no; }
+
+  filtered() {
+    const q = this.state.query.trim().toLowerCase();
+    return this.designs().filter(d =>
+      (!this.state.onlyNew || d.isNew) &&
+      (!this.state.theme || d.theme[0] === this.state.theme) &&
+      (!this.state.coll || d.coll === this.state.coll) &&
+      (!q || d.title.toLowerCase().includes(q))
+    );
+  }
+
+  set(patch) { this.setState(patch); }
+
+  countIn(key) { return this.designs().filter(d => d.coll === key).length; }
+
+  featuredCollections() {
+    const m = new Date().getMonth();
+    // Distance to the collection's next occurrence — never surfaces a season that just passed.
+    const score = c => Math.min(...c.months.map(x => (x - m + 12) % 12));
+    return COLLECTIONS
+      .filter(c => this.countIn(c.key) > 0)
+      .sort((a, b) => score(a) - score(b))
+      .slice(0, 3);
+  }
+
+  tile(d) {
+    return {
+      title: d.title, bg: d.bg, slug: d.slug, priceLabel: this.kr(d.price),
+      theme: this.t(d.theme[0], d.theme[1]),
+      open: () => this.setState({ screen: "product", current: d.id })
+    };
+  }
+
+  lines() {
+    return this.state.cart.map((l, i) => {
+      const d = this.designs()[l.id];
+      return {
+        title: d.title, bg: d.bg, qty: l.qty,
+        variant: COLORS[l.color][this.state.lang === "en" ? 1 : 0] + " · " + SIZES[l.size],
+        total: this.kr(d.price * l.qty),
+        inc: () => this.mutate(i, 1), dec: () => this.mutate(i, -1),
+        remove: () => this.setState(s => ({ cart: s.cart.filter((_, j) => j !== i) }))
+      };
+    });
+  }
+
+  mutate(i, delta) {
+    this.setState(s => {
+      const cart = s.cart.map((l, j) => j === i ? { ...l, qty: Math.max(1, l.qty + delta) } : l);
+      return { cart };
+    });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const en = s.lang === "en";
+    const all = this.filtered();
+    const shipCosts = [0, 59, 149];
+    const sub = s.cart.reduce((a, l) => a + this.designs()[l.id].price * l.qty, 0);
+    const freeAt = this.props.freeShipThreshold ?? 599;
+    const ship = sub >= freeAt || sub === 0 ? 0 : shipCosts[s.ship];
+    const totalN = sub + ship;
+    const cur = this.designs()[s.current];
+    const total = this.designs().length;
+    const featured = this.featuredCollections();
+    const activeColl = COLLECTIONS.find(c => c.key === s.coll);
+
+    const payNames = [
+      ["Vipps", "Betal med telefonnummer", "Pay with your phone number", "#ff5b24", "Anbefalt", "Recommended"],
+      ["Klarna", "Del opp i 4 rentefrie betalinger", "Split into 4 interest-free payments", "#ffb3c7", "", ""],
+      ["Kort", "Visa · Mastercard", "Visa · Mastercard", "#2a3446", "", ""],
+      ["Apple Pay / Google Pay", "Ett trykk i nettleseren", "One tap in your browser", "#c9c2b0", "", ""]
+    ];
+
+    return {
+      langLabel: en ? "NO" : "EN",
+      toggleLang: () => this.set({ lang: en ? "no" : "en" }),
+      query: s.query,
+      onQuery: e => this.set({ query: e.target.value, screen: "catalog", limit: 16 }),
+      cartCount: s.cart.reduce((a, l) => a + l.qty, 0),
+      goHome: e => { if (e) e.preventDefault(); this.set({ screen: "home" }); },
+      goCatalog: e => { if (e) e.preventDefault(); this.set({ screen: "catalog", onlyNew: false, coll: null, theme: null, limit: 16 }); },
+      goNew: e => { if (e) e.preventDefault(); this.set({ screen: "catalog", onlyNew: true, coll: null, theme: null, limit: 16 }); },
+      goCart: () => this.set({ screen: "cart" }),
+      goCheckout: () => this.set({ screen: "checkout" }),
+      isHome: s.screen === "home", isCatalog: s.screen === "catalog",
+      isProduct: s.screen === "product", isCart: s.screen === "cart",
+      isCheckout: s.screen === "checkout", isDone: s.screen === "done",
+
+      todayList: this.designs().slice(0, Math.min(5, this.props.dailyDrop ?? 10)).map(d => this.tile(d)),
+      publishedLabel: total + (en ? " designs published" : " design publisert"),
+      allLabel: (en ? "All " : "Alle ") + total + " →",
+      collections: featured.map(c => ({
+        name: en ? c.en : c.no, bg: c.bg,
+        count: this.countIn(c.key) + " design",
+        open: () => this.set({ screen: "catalog", coll: c.key, theme: null, onlyNew: false, limit: 16 })
+      })),
+      collFilters: COLLECTIONS.map(c => ({
+        label: en ? c.en : c.no, count: this.countIn(c.key),
+        bg: s.coll === c.key ? "#16150f" : "transparent",
+        fg: s.coll === c.key ? "#f7f5f0" : "#16150f",
+        pick: () => this.set({ coll: s.coll === c.key ? null : c.key, limit: 16 })
+      })),
+
+      catalogTitle: s.onlyNew ? (en ? "New today" : "Nytt i dag")
+        : activeColl ? (en ? activeColl.en : activeColl.no)
+        : (s.theme || (en ? "The archive" : "Arkivet")),
+      resultLabel: all.length + (en ? " designs" : " design"),
+      visibleList: all.slice(0, s.limit).map(d => this.tile(d)),
+      hasMore: all.length > s.limit,
+      noResults: all.length === 0,
+      emptyLine: en ? "No designs in this collection yet — coming soon." : "Ingen design i denne kolleksjonen ennå — kommer snart.",
+      loadMore: () => this.set({ limit: s.limit + 12 }),
+
+      themeFilters: THEMES.map(t => ({
+        label: en ? t[1] : t[0], count: this.designs().filter(d => d.theme[0] === t[0]).length,
+        bg: s.theme === t[0] ? "#16150f" : "transparent",
+        fg: s.theme === t[0] ? "#f7f5f0" : "#16150f",
+        pick: () => this.set({ theme: s.theme === t[0] ? null : t[0], limit: 16 })
+      })),
+      colorFilters: COLORS.map((c, i) => ({
+        label: en ? c[1] : c[0], hex: c[2],
+        ring: s.color === i ? "2px solid #16150f" : "none",
+        selRing: s.pColor === i ? "2px solid #16150f" : "none",
+        pick: () => this.set({ color: s.color === i ? null : i }),
+        select: () => this.set({ pColor: i })
+      })),
+      sizeFilters: SIZES.map((z, i) => ({
+        label: z,
+        bg: s.size === i ? "#16150f" : "transparent", fg: s.size === i ? "#f7f5f0" : "#16150f",
+        selBg: s.pSize === i ? "#16150f" : "transparent", selFg: s.pSize === i ? "#f7f5f0" : "#16150f",
+        pick: () => this.set({ size: s.size === i ? null : i }),
+        select: () => this.set({ pSize: i })
+      })),
+      clearFilters: () => this.set({ theme: null, coll: null, color: null, size: null, query: "", onlyNew: false }),
+
+      current: { title: cur.title, bg: cur.bg, slug: cur.slug, priceLabel: this.kr(cur.price), theme: en ? cur.theme[1] : cur.theme[0] },
+      addLabel: en ? "Add to cart — " + this.kr(cur.price) : "Legg i handlekurv — " + this.kr(cur.price),
+      addToCart: () => this.setState(st => ({ cart: st.cart.concat([{ id: st.current, color: st.pColor, size: st.pSize, qty: 1 }]), screen: "cart" })),
+      buyNow: () => this.setState(st => ({ cart: st.cart.concat([{ id: st.current, color: st.pColor, size: st.pSize, qty: 1 }]), screen: "checkout", pay: 0 })),
+
+      cart: this.lines(), cartEmpty: s.cart.length === 0,
+      subtotal: this.kr(sub), shipping: ship === 0 ? (en ? "Free" : "Gratis") : this.kr(ship),
+      vat: this.kr(Math.round(totalN * 0.2)), total: this.kr(totalN),
+
+      shippingOptions: [
+        [en ? "Pick-up point — Posten" : "Hentested — Posten", "2–4 " + (en ? "working days" : "virkedager"), 0],
+        [en ? "Home delivery — Bring" : "Hjem til døra — Bring", "2–3 " + (en ? "working days" : "virkedager"), 59],
+        [en ? "Express — Bring 09:00" : "Ekspress — Bring 09:00", "1 " + (en ? "working day" : "virkedag"), 149]
+      ].map((o, i) => ({
+        name: o[0], eta: o[1],
+        price: sub >= 599 && i === 0 ? (en ? "Free" : "Gratis") : this.kr(o[2]),
+        border: s.ship === i ? "#16150f" : "#ddd7c9",
+        pick: () => this.set({ ship: i })
+      })),
+      paymentOptions: payNames.map((p, i) => ({
+        name: p[0], note: en ? p[2] : p[1], chip: p[3],
+        meta: en ? p[5] : p[4],
+        border: s.pay === i ? "#16150f" : "#ddd7c9",
+        pick: () => this.set({ pay: i })
+      })),
+      payLabel: (en ? "Pay " : "Betal ") + this.kr(totalN) + " · " + payNames[s.pay][0],
+      orderNote: en ? "Secure payment. Prices include 25 % Norwegian VAT." : "Sikker betaling. Priser inkluderer 25 % norsk mva.",
+      placeOrder: () => this.set({ screen: "done", orderId: "FC-2026-" + Math.floor(100000 + Math.random() * 899999) }),
+      orderId: (en ? "Order no. " : "Ordrenr. ") + (s.orderId || "FC-2026-000000")
+    };
+  }
+}
+
+</script>
+</body>
+</html>

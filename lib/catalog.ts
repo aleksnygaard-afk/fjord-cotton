@@ -276,6 +276,25 @@ export async function getDesignBySlug(
   };
 }
 
+// ── Sitemap ──────────────────────────────────────────────────
+/** All published design slugs (newest first) for the sitemap. */
+export async function getAllPublishedSlugs(
+  limit = 10000,
+): Promise<{ slug: string; publishedAt: string | null }[]> {
+  const { data, error } = await supabasePublic()
+    .from("designs")
+    .select("slug, published_at")
+    .eq("status", "published")
+    .not("published_at", "is", null)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`getAllPublishedSlugs: ${error.message}`);
+  return (data ?? []).map((r: any) => ({
+    slug: r.slug,
+    publishedAt: r.published_at ?? null,
+  }));
+}
+
 // ── Facets ───────────────────────────────────────────────────
 export async function getFacets(): Promise<Facets> {
   const db = supabasePublic();

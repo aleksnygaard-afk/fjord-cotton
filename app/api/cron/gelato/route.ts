@@ -13,9 +13,11 @@ export const maxDuration = 60;
  * that was dropped, transient Gelato errors, and crashed 'submitting' claims
  * (claim_gelato_job reclaims those after 10 min).
  *
- * Schedule it every ~10 min (Vercel Cron in vercel.json, Supabase pg_cron, or a
- * scheduled agent). Guarded by CRON_SECRET (Bearer header or ?secret=). Fails
- * closed if CRON_SECRET is unset.
+ * Scheduled daily at 06:00 (`0 6 * * *`) in vercel.json — the Vercel Hobby plan
+ * allows one cron run per day. It's only a backstop: the primary submission runs
+ * immediately via after() on the paid webhook. For faster failure recovery, run
+ * it more often on Vercel Pro / Supabase pg_cron / a scheduled agent. Guarded by
+ * CRON_SECRET (Bearer header or ?secret=). Fails closed if CRON_SECRET is unset.
  */
 function authorized(request: Request): boolean {
   const secret = env.cronSecret;

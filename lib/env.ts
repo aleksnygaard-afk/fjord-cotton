@@ -33,6 +33,10 @@ export const env = {
   // VAT registration is pending — off until confirmed (05-norwegian-compliance.md).
   vatRegistered: process.env.VAT_REGISTERED === "true",
 
+  // Launch Norway-only by default (05: simplest and correct). Enable the other
+  // Nordic countries only once IOSS / destination VAT is handled.
+  checkoutNordics: process.env.CHECKOUT_NORDICS === "true",
+
   // ── Dintero (03-api-and-payments.md) ──
   dintero: {
     accountId: process.env.DINTERO_ACCOUNT_ID ?? "",

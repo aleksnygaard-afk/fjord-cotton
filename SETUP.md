@@ -1,12 +1,19 @@
-# Fjord & Cotton — developer setup (build-order step 1)
+# Fjord & Cotton — developer setup
 
-This is the running implementation of the store in `README.md`, using the
-recommended stack: **Next.js (App Router) + TypeScript**, **Supabase** (Postgres
-+ Storage), **Sharp** for mockups. Payments (Dintero) and fulfilment (Gelato)
-are later build-order steps and are not wired up yet.
+The running implementation of the store in `README.md`, on the recommended stack:
+**Next.js (App Router) + TypeScript**, **Supabase** (Postgres + Storage),
+**Dintero** payments, **Gelato** fulfilment, **Sharp** mockups, **Resend** email,
+deployed on **Vercel**.
 
-**What step 1 delivers:** the database schema + reference data, and the admin
-upload flow — "you cannot test a shop with no products".
+**All seven build-order steps are implemented:** (1) schema + admin upload,
+(2) catalog + product pages with `/no`·`/en` i18n, (3) cart + checkout,
+(4) Dintero orders, (5) Gelato fulfilment, (6) legal pages + receipts,
+(7) go-live (Norway-only default, launch-check, SEO, hardening).
+
+Dintero, Gelato and email each have a **mock mode** (on when their keys are
+absent), so the entire purchase flow — add to cart → pay → order paid → Gelato
+submitted → receipt — runs offline with only a Supabase project. Configure the
+real keys and flip `VAT_REGISTERED=true` to go live.
 
 ---
 
@@ -154,8 +161,11 @@ On the first `paid` transition the webhook enqueues Gelato submission as a
 
 A **retry cron** (`/api/cron/gelato`, guarded by `CRON_SECRET`) re-attempts paid
 orders that haven't submitted — covering dropped `after()` work, transient Gelato
-errors, and crashed claims (reclaimed after 10 min). It's scheduled every 15 min
-in `vercel.json`; on Supabase you can use `pg_cron`, or a scheduled agent.
+errors, and crashed claims (reclaimed after 10 min). It's scheduled **daily at
+06:00** (`0 6 * * *`) in `vercel.json` — the Vercel Hobby plan allows one cron run
+per day. Since the primary submission runs immediately via `after()` on the paid
+webhook, this is only a backstop; on Vercel Pro (or Supabase `pg_cron` / a
+scheduled agent) you can run it more frequently for faster recovery from failures.
 Gelato's status webhook (`/api/webhooks/gelato`) maps **printed → in_production**,
 **shipped → shipped** (forward-only, idempotent) and saves the tracking URL.
 
@@ -281,6 +291,9 @@ select * from v_collection_counts;             -- powers the sidebar / "I sesong
 - Legal pages render (200) in `/no` and `/en` with the required content; the
   org.nr shows without the MVA suffix while `VAT_REGISTERED=false`; the
   bookkeeping export is admin-guarded (401 without the token).
+- Go-live: Norway-only enforced server-side (`country=SE` → 422, `NO` passes);
+  `robots.txt` blocks admin/api/transactional; `sitemap.xml` returns valid XML;
+  `launch-check` is admin-guarded; security headers are present on responses.
 
 **Not yet exercised here:** the Supabase-backed paths — uploads, catalog/product
 rendering, and the order state machine (`create_order` → session →
@@ -315,6 +328,8 @@ app/
   api/cron/gelato                          # fulfilment retry (CRON_SECRET)
   api/admin/designs, api/admin/facets      # admin API (step 1)
   api/admin/bookkeeping                    # CSV export for Fiken/Tripletex (step 6)
+  api/admin/launch-check                   # live go-live checklist (step 7)
+  robots.ts, sitemap.ts                    # SEO: robots.txt + dynamic sitemap.xml
 components/
   header.tsx, footer.tsx                   # global chrome
   i18n-provider.tsx, cart-provider.tsx     # locale + cart (localStorage) contexts
@@ -347,16 +362,46 @@ vercel.json                                # Gelato retry cron schedule
 - Colour/size in the sidebar are visual selectors (as in the prototype); the
   composing filters are collection AND theme AND search.
 
-## Go live (step 7 — README pre-launch checklist)
+## Go live (step 7)
 
-- [ ] VAT registration approved → set `VAT_REGISTERED=true` (org.nr shows the MVA
-      suffix; VAT rows + amounts reappear across cart/checkout/receipt)
-- [ ] Dintero agreement signed → production `DINTERO_*` keys + `DINTERO_WEBHOOK_SECRET`
-- [ ] Gelato product UIDs filled into `garment_colors.gelato_variant_key`, real
+**Deploy.** Push to a Git repo and import it into **Vercel** (zero-config for
+Next.js). Choose an **EU region** for both Vercel and Supabase — it can't be
+changed later and Norwegian data should stay in the EU/EEA. Set every variable
+from `.env.example` in the Vercel project (production), including `CRON_SECRET`
+(Vercel Cron sends it as a Bearer token to `/api/cron/gelato`, scheduled in
+`vercel.json`). Set `NEXT_PUBLIC_SITE_URL` to the real **https** origin, and
+register that origin's webhook URLs in the Dintero and Gelato dashboards.
+
+**Launch is Norway-only by default** (`CHECKOUT_NORDICS=false`) — the compliant
+choice (05). Checkout offers only Norway and the session route rejects other
+countries. Open the Nordics (`CHECKOUT_NORDICS=true`) only once IOSS /
+destination VAT is handled.
+
+**Readiness endpoint.** Hit the live checklist any time:
+
+```bash
+curl -s https://<site>/api/admin/launch-check -H "x-admin-token: $ADMIN_TOKEN" | jq
+# → { ready: false, blockers: ["Dintero in mock mode …", "Gelato UID missing …"], checks: {…} }
+```
+
+`ready: true` means nothing is still in mock mode, the Gelato product mapping is
+complete, VAT is registered, the site is https, and designs are published.
+
+**SEO.** `robots.txt` allows the storefront and blocks admin/api/transactional
+pages; `sitemap.xml` is generated per request and lists every published design in
+both locales. Product pages are SSR with per-design titles and `metadataBase`.
+
+### Pre-launch checklist (README + 05)
+
+- [ ] VAT registration approved → `VAT_REGISTERED=true` (org.nr gains the MVA
+      suffix; VAT rows + amounts reappear in cart/checkout/receipt)
+- [ ] Dintero agreement signed → production `DINTERO_*` + `DINTERO_WEBHOOK_SECRET`
+- [ ] Gelato product UIDs in `garment_colors.gelato_variant_key`, real
       `GELATO_API_KEY` + `GELATO_WEBHOOK_SECRET`
 - [ ] `RESEND_API_KEY` + verified `EMAIL_FROM`; test a real receipt
-- [ ] Supabase + Vercel projects in an **EU region**; `CRON_SECRET` set
+- [ ] Supabase + Vercel in an **EU region**; `CRON_SECRET` set
 - [ ] Legal pages reviewed against the Forbrukertilsynet template
-- [ ] Non-Norwegian countries removed from checkout, or IOSS registered
+- [ ] Norway-only (default) or IOSS registered + `CHECKOUT_NORDICS=true`
 - [ ] Bookkeeping export tested against Fiken/Tripletex
+- [ ] `GET /api/admin/launch-check` returns `ready: true`
 - [ ] One real end-to-end order: Vipps → paid → Gelato → tracking → receipt

@@ -36,6 +36,12 @@ export const PAYMENT_CHIP: Record<PaymentMethod, string> = {
   wallet: "#c9c2b0",
 };
 
+// Checkout countries. Launch is Norway-only (05-norwegian-compliance.md); the
+// other Nordics open behind CHECKOUT_NORDICS once IOSS/destination VAT is handled.
+export function allowedCountryCodes(nordics: boolean): string[] {
+  return nordics ? ["NO", "SE", "DK", "FI"] : ["NO"];
+}
+
 export type Totals = {
   subtotal: number;
   shipping: number;

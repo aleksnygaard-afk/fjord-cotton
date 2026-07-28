@@ -12,5 +12,10 @@ export default async function CheckoutPage({
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  return <CheckoutView vatRegistered={env.vatRegistered} />;
+  return (
+    <CheckoutView
+      vatRegistered={env.vatRegistered}
+      nordics={env.checkoutNordics}
+    />
+  );
 }

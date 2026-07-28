@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
+import { allowedCountryCodes } from "@/lib/cart-totals";
 import { createSession, dinteroPaymentType } from "@/lib/dintero";
 
 export const runtime = "nodejs";
@@ -53,6 +54,15 @@ export async function POST(request: Request) {
     );
   }
   const input = parsed.data;
+
+  // Enforce the launch country policy server-side (05-norwegian-compliance.md).
+  if (!allowedCountryCodes(env.checkoutNordics).includes(input.country)) {
+    return NextResponse.json(
+      { error: `shipping to ${input.country} is not available` },
+      { status: 422 },
+    );
+  }
+
   const db = supabaseAdmin();
 
   // Merge duplicate variant ids (cart_lines is unique per (cart, variant)).

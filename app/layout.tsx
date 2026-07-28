@@ -19,7 +19,13 @@ const archivo = Archivo({
 });
 
 export const metadata: Metadata = {
-  title: "Fjord & Cotton",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  ),
+  title: {
+    default: "Fjord & Cotton",
+    template: "%s · Fjord & Cotton",
+  },
   description:
     "Originale trykk på tung kammet bomull. Nye design publisert hver dag.",
 };

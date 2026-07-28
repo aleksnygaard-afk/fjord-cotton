@@ -39,7 +39,8 @@ export async function generateMetadata({
     (locale === "en"
       ? "Original print on heavy combed cotton, printed in Oslo."
       : "Originalt trykk på tung kammet bomull, trykket i Oslo.");
-  return { title: `${title} · Fjord & Cotton`, description: desc };
+  // The root layout's title template appends " · Fjord & Cotton".
+  return { title, description: desc };
 }
 
 export default async function ProductPage({

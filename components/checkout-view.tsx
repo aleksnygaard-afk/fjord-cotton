@@ -10,6 +10,7 @@ import { formatKr } from "@/lib/money";
 import {
   computeTotals,
   effectiveShipping,
+  allowedCountryCodes,
   SHIPPING_METHODS,
   PAYMENT_METHODS,
   PAYMENT_CHIP,
@@ -28,10 +29,19 @@ import {
  * and redirect to Dintero. For now it generates a placeholder order number,
  * clears the cart and shows the confirmation screen.
  */
-export function CheckoutView({ vatRegistered }: { vatRegistered: boolean }) {
+export function CheckoutView({
+  vatRegistered,
+  nordics,
+}: {
+  vatRegistered: boolean;
+  nordics: boolean;
+}) {
   const { locale, dict } = useI18n();
   const { lines, hydrated } = useCart();
   const router = useRouter();
+
+  const allowed = allowedCountryCodes(nordics);
+  const countries = dict.countries.filter((c) => allowed.includes(c.code));
 
   const [form, setForm] = useState({
     email: "",
@@ -213,9 +223,9 @@ export function CheckoutView({ vatRegistered }: { vatRegistered: boolean }) {
             value={form.country}
             onChange={(e) => set("country", e.target.value)}
           >
-            {/* Nordic countries per the design. Go-live: restrict to Norway or
-                register IOSS for EU VAT (05-norwegian-compliance.md). */}
-            {dict.countries.map((c) => (
+            {/* Norway-only at launch; the other Nordics open behind
+                CHECKOUT_NORDICS once IOSS/destination VAT is handled (05). */}
+            {countries.map((c) => (
               <option key={c.code} value={c.code}>
                 {c.name}
               </option>

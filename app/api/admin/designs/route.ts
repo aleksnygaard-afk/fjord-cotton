@@ -1,125 +1,320 @@
-import { NextResponse } from 'next/server'
-import { requireAdmin, supabaseAdmin } from '@/lib/supabase'
-import { slugify, uniqueSlug } from '@/lib/slug'
-import { createProductFromTemplate, GelatoError } from '@/lib/gelato'
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import sharp from "sharp";
+import { supabaseAdmin } from "@/lib/supabase/server";
+import { isAuthorizedAdmin } from "@/lib/admin-auth";
+import { slugifyBase, uniqueSlug } from "@/lib/slug";
+import { rotatingTileBg } from "@/lib/tokens";
+import { kronerToOre } from "@/lib/money";
+import { renderMockups } from "@/lib/mockup";
+import { env } from "@/lib/env";
 
-type Row = {
-  printPath: string
-  title: string
-  themeKey: string
-  collectionKey: string
-  price: number
-  contrast: 'light_safe' | 'dark_safe' | 'neutral'
-  schedule: boolean
+export const runtime = "nodejs";
+// Print files are large; allow generous execution time for upload + compositing.
+export const maxDuration = 60;
+
+/**
+ * POST /api/admin/designs  (multipart/form-data)
+ *
+ * The one-file-at-a-time upload step of the daily publishing pipeline
+ * (04-gelato-fulfilment.md). For each print file the admin supplies only:
+ * title, theme, collection, optional price override, and a publish choice.
+ * Everything else is derived:
+ *   - slug            from the title (+ collision counter)
+ *   - tile_bg         rotating palette
+ *   - mockup/detail   composited from the print with Sharp
+ *   - variants        generate_variants() — one row per colour × size
+ *   - provenance      prompt + generator stored for IP disputes
+ */
+
+const FormSchema = z.object({
+  title: z.string().trim().min(1, "title is required").max(120),
+  themeKey: z.string().trim().min(1).optional(),
+  collectionKey: z.string().trim().min(1).optional(),
+  // Whole kroner as typed by the admin; converted to øre. Rare (premium art).
+  priceOverrideKr: z.coerce.number().int().positive().max(100000).optional(),
+  status: z.enum(["draft", "scheduled", "published"]),
+  // ISO datetime; required when status = scheduled.
+  publishAt: z.string().datetime().optional(),
+  prompt: z.string().trim().max(4000).optional(),
+  generator: z.string().trim().max(120).optional(),
+});
+
+// Gelato artwork requirements (04-gelato-fulfilment.md).
+const REQUIRED_W = 4500;
+const REQUIRED_H = 5400;
+
+export async function POST(request: Request) {
+  if (!isAuthorizedAdmin(request)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return NextResponse.json(
+      { error: "expected multipart/form-data" },
+      { status: 400 },
+    );
+  }
+
+  // ── Validate metadata ──
+  const parsed = FormSchema.safeParse({
+    title: form.get("title"),
+    themeKey: form.get("themeKey") || undefined,
+    collectionKey: form.get("collectionKey") || undefined,
+    priceOverrideKr: form.get("priceOverrideKr") || undefined,
+    status: form.get("status"),
+    publishAt: form.get("publishAt") || undefined,
+    prompt: form.get("prompt") || undefined,
+    generator: form.get("generator") || undefined,
+  });
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "invalid input", issues: parsed.error.flatten() },
+      { status: 422 },
+    );
+  }
+  const input = parsed.data;
+
+  if (input.status === "scheduled" && !input.publishAt) {
+    return NextResponse.json(
+      { error: "publishAt is required when status is 'scheduled'" },
+      { status: 422 },
+    );
+  }
+
+  // ── Validate the print file ──
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return NextResponse.json(
+      { error: "a print file is required (field 'file')" },
+      { status: 422 },
+    );
+  }
+  const printBuffer = Buffer.from(await file.arrayBuffer());
+
+  const warnings: string[] = [];
+  let meta: sharp.Metadata;
+  try {
+    meta = await sharp(printBuffer).metadata();
+  } catch {
+    return NextResponse.json(
+      { error: "file is not a readable image" },
+      { status: 422 },
+    );
+  }
+  if (meta.format !== "png") {
+    return NextResponse.json(
+      { error: "print file must be a PNG (transparent, 4500×5400)" },
+      { status: 422 },
+    );
+  }
+  if (!meta.hasAlpha) {
+    warnings.push("print file has no alpha channel — Gelato needs transparency");
+  }
+  if (meta.width !== REQUIRED_W || meta.height !== REQUIRED_H) {
+    warnings.push(
+      `print file is ${meta.width}×${meta.height}; Gelato requires ${REQUIRED_W}×${REQUIRED_H} @300dpi`,
+    );
+  }
+
+  const db = supabaseAdmin();
+
+  // ── Resolve theme / collection keys → ids ──
+  let themeId: string | null = null;
+  if (input.themeKey) {
+    const { data, error } = await db
+      .from("themes")
+      .select("id")
+      .eq("key", input.themeKey)
+      .maybeSingle();
+    if (error) return dbError(error.message);
+    if (!data)
+      return NextResponse.json(
+        { error: `unknown theme '${input.themeKey}'` },
+        { status: 422 },
+      );
+    themeId = data.id;
+  }
+
+  let collectionId: string | null = null;
+  if (input.collectionKey) {
+    const { data, error } = await db
+      .from("collections")
+      .select("id")
+      .eq("key", input.collectionKey)
+      .maybeSingle();
+    if (error) return dbError(error.message);
+    if (!data)
+      return NextResponse.json(
+        { error: `unknown collection '${input.collectionKey}'` },
+        { status: 422 },
+      );
+    collectionId = data.id;
+  }
+
+  // ── Derive slug (unique) and tile_bg (rotating palette) ──
+  const slug = await uniqueSlug(slugifyBase(input.title), async (candidate) => {
+    const { data } = await db
+      .from("designs")
+      .select("id")
+      .eq("slug", candidate)
+      .maybeSingle();
+    return Boolean(data);
+  });
+
+  const { count: designCount } = await db
+    .from("designs")
+    .select("id", { count: "exact", head: true });
+  const tileBg = rotatingTileBg(designCount ?? 0);
+
+  const basePrice = input.priceOverrideKr
+    ? kronerToOre(input.priceOverrideKr)
+    : 34900;
+
+  // ── Upload artwork (print → private bucket; mockups → public bucket) ──
+  const printPath = `${slug}/print.png`;
+  const mockupPath = `${slug}/mockup.webp`;
+  const detailPath = `${slug}/detail.webp`;
+  const uploaded: { bucket: string; path: string }[] = [];
+
+  try {
+    const printUp = await db.storage
+      .from(env.printBucket)
+      .upload(printPath, printBuffer, {
+        contentType: "image/png",
+        upsert: true,
+      });
+    if (printUp.error) throw new Error(`print upload: ${printUp.error.message}`);
+    uploaded.push({ bucket: env.printBucket, path: printPath });
+
+    const { mockup, detail } = await renderMockups(printBuffer);
+
+    const mockupUp = await db.storage
+      .from(env.mockupBucket)
+      .upload(mockupPath, mockup, { contentType: "image/webp", upsert: true });
+    if (mockupUp.error)
+      throw new Error(`mockup upload: ${mockupUp.error.message}`);
+    uploaded.push({ bucket: env.mockupBucket, path: mockupPath });
+
+    const detailUp = await db.storage
+      .from(env.mockupBucket)
+      .upload(detailPath, detail, { contentType: "image/webp", upsert: true });
+    if (detailUp.error)
+      throw new Error(`detail upload: ${detailUp.error.message}`);
+    uploaded.push({ bucket: env.mockupBucket, path: detailPath });
+  } catch (e) {
+    await cleanupUploads(db, uploaded);
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "artwork upload failed" },
+      { status: 502 },
+    );
+  }
+
+  const mockupUrl = db.storage.from(env.mockupBucket).getPublicUrl(mockupPath)
+    .data.publicUrl;
+  const detailUrl = db.storage.from(env.mockupBucket).getPublicUrl(detailPath)
+    .data.publicUrl;
+
+  // ── Publishing state ──
+  // print_file_url stores the bucket-relative path (the bucket is private);
+  // fulfilment signs a short-lived URL from it at order time (04).
+  const publishedAt =
+    input.status === "published"
+      ? new Date().toISOString()
+      : input.status === "scheduled"
+        ? input.publishAt!
+        : null;
+
+  // ── Insert the design ──
+  const insert = await db
+    .from("designs")
+    .insert({
+      slug,
+      title_no: input.title,
+      theme_id: themeId,
+      collection_id: collectionId,
+      base_price: basePrice,
+      tile_bg: tileBg,
+      print_file_url: printPath,
+      mockup_url: mockupUrl,
+      detail_url: detailUrl,
+      status: input.status,
+      published_at: publishedAt,
+      prompt: input.prompt ?? null,
+      generator: input.generator ?? null,
+    })
+    .select("id, slug, status, base_price, tile_bg, mockup_url, published_at")
+    .single();
+
+  if (insert.error || !insert.data) {
+    await cleanupUploads(db, uploaded);
+    return dbError(insert.error?.message ?? "insert failed");
+  }
+  const design = insert.data;
+
+  // ── Generate variants (one row per colour × size) ──
+  const gen = await db.rpc("generate_variants", { p_design: design.id });
+  if (gen.error) {
+    return NextResponse.json(
+      {
+        error: `design created but variant generation failed: ${gen.error.message}`,
+        design,
+      },
+      { status: 500 },
+    );
+  }
+
+  const { count: variantCount } = await db
+    .from("variants")
+    .select("id", { count: "exact", head: true })
+    .eq("design_id", design.id);
+
+  // ── Audit trail ──
+  const actor = request.headers.get("x-admin-actor") ?? "admin";
+  const logRows = [{ design_id: design.id, action: "created", actor }];
+  if (input.status === "published")
+    logRows.push({ design_id: design.id, action: "published", actor });
+  await db.from("publish_log").insert(logRows);
+
+  return NextResponse.json(
+    {
+      design: {
+        id: design.id,
+        slug: design.slug,
+        status: design.status,
+        basePrice: design.base_price,
+        tileBg: design.tile_bg,
+        mockupUrl: design.mockup_url,
+        publishedAt: design.published_at,
+        variantCount: variantCount ?? 0,
+      },
+      warnings,
+    },
+    { status: 201 },
+  );
 }
 
-const TILE_BGS = ['#e9e3d4', '#ded9cb', '#e4e0d2', '#dfe2dc', '#e7e0d8', '#dcdcd4', '#e6e2d0', '#e1dcd0']
+function dbError(message: string) {
+  return NextResponse.json({ error: message }, { status: 500 });
+}
 
-export async function POST(req: Request) {
-  try {
-    await requireAdmin()
-  } catch (r) {
-    return r as Response
+async function cleanupUploads(
+  db: ReturnType<typeof supabaseAdmin>,
+  uploaded: { bucket: string; path: string }[],
+) {
+  // Best-effort: don't let cleanup failures mask the original error.
+  const byBucket = new Map<string, string[]>();
+  for (const u of uploaded) {
+    byBucket.set(u.bucket, [...(byBucket.get(u.bucket) ?? []), u.path]);
   }
-
-  const { rows } = (await req.json()) as { rows: Row[] }
-  if (!Array.isArray(rows) || rows.length === 0) {
-    return NextResponse.json({ error: 'Ingen rader.' }, { status: 400 })
-  }
-
-  const db = supabaseAdmin()
-
-  const [themes, collections, existing, count] = await Promise.all([
-    db.from('themes').select('id,key'),
-    db.from('collections').select('id,key'),
-    db.from('designs').select('slug'),
-    db.from('designs').select('id', { count: 'exact', head: true }),
-  ])
-
-  const themeId = new Map((themes.data ?? []).map((t) => [t.key, t.id]))
-  const collId = new Map((collections.data ?? []).map((c) => [c.key, c.id]))
-  const taken = new Set((existing.data ?? []).map((d) => d.slug))
-  let bgIndex = count.count ?? 0
-
-  const created: { id: string; slug: string; title: string }[] = []
-  const failed: { title: string; reason: string }[] = []
-
-  // Sequential on purpose: ten parallel Create Product calls is how you meet 429.
-  for (const row of rows) {
-    let designId: string | null = null
+  for (const [bucket, paths] of byBucket) {
     try {
-      if (!themeId.has(row.themeKey)) throw new Error(`Ukjent tema: ${row.themeKey}`)
-      if (!collId.has(row.collectionKey)) throw new Error(`Ukjent kolleksjon: ${row.collectionKey}`)
-
-      const slug = uniqueSlug(slugify(row.title), taken)
-      taken.add(slug)
-
-      const publishAt = row.schedule ? nextMorningOslo() : new Date().toISOString()
-
-      const { data: colors } = await db.rpc('colors_for_contrast', { p: row.contrast })
-
-      const { data: design, error: insertError } = await db
-        .from('designs')
-        .insert({
-          slug,
-          title: row.title.trim(),
-          theme_id: themeId.get(row.themeKey),
-          collection_id: collId.get(row.collectionKey),
-          base_price: Math.round(row.price) * 100, // øre
-          tile_bg: TILE_BGS[bgIndex++ % TILE_BGS.length],
-          print_file_url: row.printPath,
-          contrast: row.contrast,
-          allowed_colors: colors,
-          status: row.schedule ? 'scheduled' : 'published',
-          published_at: publishAt,
-          mockup_status: 'pending',
-        })
-        .select('id,slug')
-        .single()
-
-      if (insertError) throw new Error(insertError.message)
-      designId = design.id
-
-      const { error: variantError } = await db.rpc('generate_variants', { p_design: design.id })
-      if (variantError) throw new Error(`generate_variants: ${variantError.message}`)
-
-      // Gelato has to fetch the file, so it needs a URL — signed, not public.
-      const { data: signed, error: signError } = await db.storage
-        .from('print-files')
-        .createSignedUrl(row.printPath, 60 * 60 * 24)
-      if (signError || !signed) throw new Error('Kunne ikke signere trykkfilen')
-
-      const product = await createProductFromTemplate({
-        title: row.title.trim(),
-        printFileUrl: signed.signedUrl,
-        externalId: design.slug, // stable: a retry updates rather than duplicates
-      })
-
-      await db.from('designs').update({ gelato_product_id: product.id }).eq('id', design.id)
-
-      created.push({ id: design.id, slug: design.slug, title: row.title })
-    } catch (e: unknown) {
-      // Roll this row back and keep going — one bad file must not kill a batch of ten.
-      if (designId) await db.from('designs').delete().eq('id', designId)
-      const reason =
-        e instanceof GelatoError
-          ? `Gelato ${e.status}${e.retryable ? ' (prøv igjen)' : ' — sjekk filen'}`
-          : e instanceof Error
-            ? e.message
-            : 'Ukjent feil'
-      failed.push({ title: row.title, reason })
+      await db.storage.from(bucket).remove(paths);
+    } catch {
+      /* ignore */
     }
   }
-
-  return NextResponse.json({ created, failed })
-}
-
-/** Tomorrow 08:00 Europe/Oslo, as UTC. */
-function nextMorningOslo(): string {
-  const now = new Date()
-  const oslo = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Oslo' }))
-  const offset = now.getTime() - oslo.getTime()
-  oslo.setDate(oslo.getDate() + 1)
-  oslo.setHours(8, 0, 0, 0)
-  return new Date(oslo.getTime() + offset).toISOString()
 }

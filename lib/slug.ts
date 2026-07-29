@@ -1,47 +1,37 @@
-/**
- * Slug generation. Slugs are permanent once a design is published (SEO), so we
- * derive them from the title, transliterate Norwegian characters, and append a
- * numeric counter on collision (04-gelato-fulfilment.md).
- */
+const MAP: Record<string, string> = {
+  æ: 'ae', ø: 'o', å: 'aa', ä: 'a', ö: 'o', ü: 'u', é: 'e', è: 'e', ê: 'e', ç: 'c', ñ: 'n',
+}
 
-const NORWEGIAN_MAP: Record<string, string> = {
-  æ: "ae",
-  ø: "o",
-  å: "a",
-  Æ: "ae",
-  Ø: "o",
-  Å: "a",
-};
-
-export function slugifyBase(title: string): string {
-  const transliterated = title
-    .trim()
-    .replace(/[æøåÆØÅ]/g, (ch) => NORWEGIAN_MAP[ch] ?? ch);
-
-  const slug = transliterated
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "") // strip remaining combining diacritics
+export function slugify(input: string): string {
+  return input
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-") // non-alphanumerics → hyphen
-    .replace(/^-+|-+$/g, "") // trim hyphens
-    .replace(/-{2,}/g, "-"); // collapse repeats
-
-  return slug || "design";
+    .replace(/[æøåäöüéèêçñ]/g, (c) => MAP[c] ?? c)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60) || 'design'
 }
 
 /**
- * Given a base slug and a predicate that reports whether a candidate already
- * exists, returns the first free slug: `nordlys`, then `nordlys-2`, `nordlys-3`…
+ * Slugs are permanent once published (SEO), so collisions get a counter rather than
+ * a timestamp. taken = slugs already in the database with this stem.
  */
-export async function uniqueSlug(
-  base: string,
-  exists: (candidate: string) => Promise<boolean>,
-): Promise<string> {
-  if (!(await exists(base))) return base;
-  for (let n = 2; n < 10000; n++) {
-    const candidate = `${base}-${n}`;
-    if (!(await exists(candidate))) return candidate;
+export function uniqueSlug(base: string, taken: Set<string>): string {
+  if (!taken.has(base)) return base
+  for (let n = 2; n < 500; n++) {
+    const candidate = `${base}-${n}`
+    if (!taken.has(candidate)) return candidate
   }
-  // Astronomically unlikely; fail loudly rather than loop forever.
-  throw new Error(`Could not allocate a unique slug for "${base}"`);
+  return `${base}-${Date.now()}`
+}
+
+/** Filename → suggested title. 'host-01-graa-mandag.png' → 'Graa Mandag' */
+export function titleFromFilename(name: string): string {
+  return name
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/^[a-z]{2,6}[-_]?\d{1,3}[-_]/i, '')
+    .replace(/[-_]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase()) || 'Uten tittel'
 }

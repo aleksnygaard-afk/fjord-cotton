@@ -40,7 +40,7 @@ add to cart → pay → order paid → Gelato submitted → receipt — runs off
 ```bash
 npm install
 cp .env.example .env.local        # fill in Supabase; leave provider keys blank for mock mode
-# apply supabase/migrations/0001–0008 (SQL editor or `supabase db push`)
+# apply supabase/migrations/0001–0010 (SQL editor or `supabase db push`)
 npm run dev                        # http://localhost:3000 → /no
 ```
 
@@ -64,6 +64,7 @@ hit whichever database `.env.local` points at.
 ```bash
 node scripts/db-sjekk.mjs             # is the schema what the code expects?
 node scripts/test-publisering.mjs     # the publishing test list, needs a dev server
+node scripts/test-kasse.mjs           # cart → order → paid → fulfilment, needs a dev server
 node scripts/rydd-testdata.mjs        # list leftover test designs (--slett to remove)
 node scripts/seed-gelato-uids.mjs > uids.sql   # once, after the Gelato template exists
 ```
@@ -77,6 +78,21 @@ admin API's authentication, the four print files that must be rejected, publishi
 with the colour restriction, and that drafts stay out of the storefront. It creates
 its designs as `draft` (a published test shirt would be visible in the real shop) and
 deletes everything afterwards. Use `APP_URL=http://localhost:3100` for another port.
+
+`test-kasse.mjs` covers what the publishing test cannot reach: cart → order → paid →
+Gelato submission → the confirmation page with and without its token, including the
+amounts, the free-shipping threshold and webhook idempotency. Start the dev server
+with `EMAIL_MOCK=true` — otherwise the receipt is really sent to the fake address in
+the script, and a bounce costs the sending domain reputation. Two bugs found by this
+script alone, both invisible until an order was carried all the way to paid:
+`create_order` not resolving `gen_random_bytes` (0009), and `gelato_status` being NULL
+so `claim_gelato_job` silently refused every paid order (0010).
+
+> Do not run `test-kasse.mjs` against production once the shop is live. It deletes
+> its own order row, and *Compliance* below says orders are never deleted; it also
+> consumes order numbers, leaving gaps in a sequence Bokføringsloven expects to be
+> unbroken. Before launch both are harmless — after launch it belongs in a separate
+> Supabase project.
 
 ---
 
@@ -171,8 +187,8 @@ lib/
   email.ts · company.ts                     # receipts/alerts + legal identity
   supabase/public.ts (anon) · supabase/server.ts (service-role)
   env.ts · admin-auth.ts · slug.ts · tokens.ts · money.ts · mockup.ts
-supabase/migrations/                        # 0001–0008
-scripts/                                    # env.mjs + seed, db-sjekk, test-publisering, rydd-testdata
+supabase/migrations/                        # 0001–0010
+scripts/                                    # env.mjs + seed, db-sjekk, test-publisering, test-kasse, rydd-testdata
 vercel.json                                 # Gelato retry cron
 ```
 
@@ -188,6 +204,8 @@ vercel.json                                 # Gelato retry cron
 | 0006 | Orders: sequence, `create_order()`, `mark_order_paid()`, `access_token` |
 | 0007 | Fulfilment state, `garment_sizes.gelato_size_code`, `claim_gelato_job()` |
 | 0008 | SKU collision again: `02e-design-colors.sql` redefined `generate_variants` from the 0001 version and reintroduced `left(slug,8)`, undoing 0004. Now `FC-<slug8>-<id6>-<COLOUR>-<SIZE>` |
+| 0009 | `create_order` could not see `gen_random_bytes`: pgcrypto lives in schema `extensions`, the function is `set search_path = public`. Checkout returned 500 on every order |
+| 0010 | `orders.gelato_status` had no default because `02g` added the column before 0007, so 0007's `add column if not exists` was a no-op. NULL never matches `claim_gelato_job`, so every paid order sat unsubmitted, silently |
 
 The 0004 → 02e → 0008 sequence is worth remembering: the `02*.sql` handoff files
 each say they replace "the version in `02-data-model.sql`", which is 0001 — so any

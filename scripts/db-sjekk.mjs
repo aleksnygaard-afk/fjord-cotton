@@ -118,6 +118,33 @@ for (const [migrasjon, table, column] of kolonner) {
   linje(ok, `  ${table}.${column}`, ok ? '' : `MANGLER — kjør ${migrasjon}`);
 }
 
+// ── Tilstander som stopper fulfilment i stillhet ────────────────────────────
+// claim_gelato_job() krever gelato_status in ('pending','failed'). Er den NULL,
+// matcher claimet aldri, submitGelatoForOrder() svarer 'not_claimed' — samme svar
+// som «en annen kjøring tok jobben» — og ordren blir stående usendt uten varsel.
+// Kolonnen ble NULL-bar fordi 02g la den til før 0007; se 0010.
+console.log('\n— ordretilstand —');
+const nullStatus = await sel('orders?gelato_status=is.null&select=order_no,status');
+linje(
+  nullStatus.length === 0,
+  '  gelato_status er satt på alle ordrer',
+  nullStatus.length ? `${nullStatus.length} med NULL: ${nullStatus.slice(0, 5).map((o) => o.order_no).join(', ')} — kjør 0010` : '',
+);
+
+const fastlast = await sel('orders?status=eq.paid&gelato_status=in.(pending,failed)&select=order_no,gelato_attempts');
+linje(
+  fastlast.length === 0,
+  '  ingen betalte ordrer venter på innsending',
+  fastlast.length ? `${fastlast.length}: ${fastlast.map((o) => `${o.order_no} (${o.gelato_attempts} forsøk)`).join(', ')}` : '',
+);
+
+const manuell = await sel('orders?gelato_status=eq.manual_review&select=order_no,gelato_last_error');
+linje(
+  manuell.length === 0,
+  '  ingen ordrer i manual_review',
+  manuell.length ? manuell.map((o) => `${o.order_no}: ${String(o.gelato_last_error).slice(0, 60)}`).join(' · ') : '',
+);
+
 // ── Contents ────────────────────────────────────────────────────────────────
 const designs = await sel('designs?select=slug,status,contrast');
 console.log('\n— innhold —');

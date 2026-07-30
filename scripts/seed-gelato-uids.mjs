@@ -3,19 +3,107 @@
 //
 // Run once, after the template is built in the Gelato dashboard.
 //
-//   GELATO_API_KEY=... GELATO_TEMPLATE_ID=... node seed-gelato-uids.mjs > uids.sql
+//   node scripts/seed-gelato-uids.mjs > uids.sql
+//
+// GELATO_API_KEY and GELATO_TEMPLATE_ID are read from .env.local (falling back to
+// .env), the same file the app uses. A real environment variable still wins, so
+// this also works:
+//
+//   GELATO_API_KEY=... GELATO_TEMPLATE_ID=... node scripts/seed-gelato-uids.mjs
 //
 // Then paste uids.sql into the Supabase SQL Editor.
 //
 // Node 18+. No dependencies.
 
-const API_KEY = process.env.GELATO_API_KEY;
-const TEMPLATE_ID = process.env.GELATO_TEMPLATE_ID;
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-if (!API_KEY || !TEMPLATE_ID) {
-  console.error('Mangler GELATO_API_KEY eller GELATO_TEMPLATE_ID.');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * Minimal .env reader — enough for KEY=value files, no dependency on dotenv.
+ * Same precedence as Next.js: a real environment variable wins over the file,
+ * .env.local wins over .env, and within one file the last assignment wins.
+ */
+function loadEnvFile(name) {
+  let text;
+  try {
+    text = readFileSync(join(ROOT, name), 'utf8');
+  } catch {
+    return; // absent is fine — the values may come from the environment
+  }
+  const seenHere = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/.exec(line);
+    if (!match) continue; // comment, blank line, or export syntax we don't need
+    const key = match[1];
+    let value = match[2].trim();
+    const quoted =
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"));
+    if (quoted && value.length >= 2) value = value.slice(1, -1);
+
+    if (!loaded.has(key) && process.env[key] !== undefined) continue; // real env wins
+    if (loaded.has(key) && !seenHere.has(key)) continue; // an earlier file wins
+
+    seenHere.add(key);
+    loaded.add(key);
+    process.env[key] = value;
+  }
+}
+
+const loaded = new Set();
+loadEnvFile('.env.local');
+loadEnvFile('.env');
+
+const API_KEY = process.env.GELATO_API_KEY;
+const TEMPLATE_RAW = process.env.GELATO_TEMPLATE_ID;
+
+if (!API_KEY) {
+  console.error(
+    'Mangler GELATO_API_KEY. Den står ikke i .env.local.\n' +
+      'Hent den i Gelato-dashbordet under Developers → API keys, og legg inn:\n' +
+      '  GELATO_API_KEY=...\n' +
+      'Nøkkelen brukes bare av dette skriptet og ved ordre — aldri i nettleseren.',
+  );
   process.exit(1);
 }
+
+if (!TEMPLATE_RAW) {
+  console.error('Mangler GELATO_TEMPLATE_ID i .env.local.');
+  process.exit(1);
+}
+
+/**
+ * The template ID is a UUID. It is easy to paste the wrong thing here: the
+ * print-file-editor URL from the catalogue looks authoritative but contains a
+ * productUid for one single size and colour, and no template at all.
+ */
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+function resolveTemplateId(raw) {
+  if (UUID.test(raw)) return UUID.exec(raw)[0]; // bare UUID, or an API URL
+  if (/productUid=/.test(raw)) {
+    console.error(
+      'GELATO_TEMPLATE_ID er en print-file-editor-URL, ikke en mal-ID.\n' +
+        'Den inneholder en productUid for én størrelse og én farge, så skriptet\n' +
+        'kan ikke lese de andre 41 variantene ut av den.\n\n' +
+        'Slik får du riktig verdi:\n' +
+        '  1. Bygg malen i Gelato-dashbordet under Templates (alle seks farger,\n' +
+        '     størrelse S–4XL aktivert), og lagre den.\n' +
+        '  2. Åpne malen. ID-en er UUID-en i adresselinjen.\n' +
+        '  3. GELATO_TEMPLATE_ID=<den UUID-en> i .env.local.',
+    );
+    process.exit(1);
+  }
+  console.error(
+    `GELATO_TEMPLATE_ID ser ikke ut som en mal-ID (forventet en UUID): ${raw.slice(0, 80)}`,
+  );
+  process.exit(1);
+}
+
+const TEMPLATE_ID = resolveTemplateId(TEMPLATE_RAW);
 
 // Gelato names colours and sizes in English. Map them to our keys.
 // If the template uses different colour names, the script tells you which ones

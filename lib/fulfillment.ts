@@ -97,7 +97,9 @@ export async function submitGelatoForOrder(
         itemReferenceId: l.sku,
         productUid: uid,
         quantity: l.qty,
-        files: [{ type: "front", url: await signPrintUrl(l.print_file_url) }],
+        // 'default' is the primary print area (the front on apparel). "front" is
+        // not a documented file type and Gelato rejects the order.
+        files: [{ type: "default", url: await signPrintUrl(l.print_file_url) }],
       });
     }
   } catch (e) {

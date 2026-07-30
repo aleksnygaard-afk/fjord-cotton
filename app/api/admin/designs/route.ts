@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import sharp from "sharp";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { isAuthorizedAdmin } from "@/lib/admin-auth";
+import { isAdmin } from "@/lib/admin-auth";
 import { slugifyBase, uniqueSlug } from "@/lib/slug";
 import { rotatingTileBg } from "@/lib/tokens";
 import { kronerToOre } from "@/lib/money";
@@ -34,6 +34,8 @@ const FormSchema = z.object({
   // Whole kroner as typed by the admin; converted to øre. Rare (premium art).
   priceOverrideKr: z.coerce.number().int().positive().max(100000).optional(),
   status: z.enum(["draft", "scheduled", "published"]),
+  // Which shirt colours the art is legible on (02f-final-palette.sql).
+  contrast: z.enum(["light_safe", "dark_safe", "neutral"]).default("neutral"),
   // ISO datetime; required when status = scheduled.
   publishAt: z.string().datetime().optional(),
   prompt: z.string().trim().max(4000).optional(),
@@ -45,7 +47,7 @@ const REQUIRED_W = 4500;
 const REQUIRED_H = 5400;
 
 export async function POST(request: Request) {
-  if (!isAuthorizedAdmin(request)) {
+  if (!(await isAdmin(request))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -66,6 +68,7 @@ export async function POST(request: Request) {
     collectionKey: form.get("collectionKey") || undefined,
     priceOverrideKr: form.get("priceOverrideKr") || undefined,
     status: form.get("status"),
+    contrast: form.get("contrast") || undefined,
     publishAt: form.get("publishAt") || undefined,
     prompt: form.get("prompt") || undefined,
     generator: form.get("generator") || undefined,
@@ -111,8 +114,53 @@ export async function POST(request: Request) {
       { status: 422 },
     );
   }
+  // A missing alpha channel is a hard reject, not a warning: the white box behind
+  // the art prints as a white rectangle, and it surfaces on a shirt already shipped.
   if (!meta.hasAlpha) {
-    warnings.push("print file has no alpha channel — Gelato needs transparency");
+    return NextResponse.json(
+      {
+        error:
+          "print file has no alpha channel — a white box prints as a white rectangle on dark shirts",
+      },
+      { status: 422 },
+    );
+  }
+
+  // An alpha channel can still be fully opaque, so check the edges. Corners and
+  // edge midpoints must be transparent: art is centred, so an opaque frame means
+  // the generator left a background in. The client checks the same thing before
+  // uploading, but the server must not trust it.
+  try {
+    const { data: alpha, info } = await sharp(printBuffer)
+      .ensureAlpha()
+      .extractChannel(3)
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const at = (x: number, y: number) => alpha[y * info.width + x];
+    const w = info.width - 1;
+    const h = info.height - 1;
+    const probes: [number, number][] = [
+      [2, 2],
+      [w - 2, 2],
+      [2, h - 2],
+      [w - 2, h - 2],
+      [w >> 1, 2],
+      [w >> 1, h - 2],
+      [2, h >> 1],
+      [w - 2, h >> 1],
+    ];
+    if (probes.filter(([x, y]) => at(x, y) > 8).length >= 5) {
+      return NextResponse.json(
+        { error: "print file background is not transparent" },
+        { status: 422 },
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { error: "could not read the print file's transparency" },
+      { status: 422 },
+    );
   }
   if (meta.width !== REQUIRED_W || meta.height !== REQUIRED_H) {
     warnings.push(
@@ -228,12 +276,25 @@ export async function POST(request: Request) {
         ? input.publishAt!
         : null;
 
+  // ── Colour restriction ──
+  // Must be written on the design BEFORE generate_variants() runs, or the design
+  // gets variants in all six colours no matter what was chosen. 'neutral' returns
+  // null, which generate_variants() reads as "every colour".
+  const colors = await db.rpc("colors_for_contrast", { p: input.contrast });
+  if (colors.error) {
+    await cleanupUploads(db, uploaded);
+    return dbError(`colour lookup failed: ${colors.error.message}`);
+  }
+  const allowedColors = (colors.data as string[] | null) ?? null;
+
   // ── Insert the design ──
   const insert = await db
     .from("designs")
     .insert({
       slug,
       title_no: input.title,
+      contrast: input.contrast,
+      allowed_colors: allowedColors,
       theme_id: themeId,
       collection_id: collectionId,
       base_price: basePrice,

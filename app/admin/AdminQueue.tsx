@@ -1,8 +1,14 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { titleFromFilename } from '@/lib/slug'
+
+/**
+ * Admin publishing queue. Posts one design at a time to POST /api/admin/designs
+ * (multipart), because that route composites mockups with Sharp and needs the
+ * file bytes. Sequential rather than parallel: ten concurrent Sharp jobs on a
+ * Vercel function is how you hit the memory ceiling.
+ */
 
 const BG = '#f7f5f0'
 const CARD = '#fffdf8'
@@ -21,14 +27,13 @@ type Contrast = (typeof CONTRAST)[number]['key']
 
 type Row = {
   file: File
-  path?: string
   title: string
   themeKey: string
   collectionKey: string
-  price: number
+  priceKr: number
   contrast: Contrast
-  status: string
-  error?: string
+  status: 'Klar' | 'Avvist' | 'Laster …' | 'Publisert' | 'Planlagt' | 'Feilet'
+  note?: string
 }
 
 type Props = {
@@ -39,56 +44,58 @@ type Props = {
 }
 
 const GRID = '56px 1.35fr 0.9fr 0.9fr 152px 78px 118px 34px'
+const REQUIRED_W = 4500
+const REQUIRED_H = 5400
 
 export default function AdminQueue({ themes, collections, colors, publishedCount }: Props) {
   const [rows, setRows] = useState<Row[]>([])
-  const [busy, setBusy] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const [published, setPublished] = useState(publishedCount)
   const [notice, setNotice] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
 
   function edit(i: number, patch: Partial<Row>) {
     setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)))
   }
 
   /**
-   * Reject bad files before upload. The alpha check is the important one: a white box
-   * behind the art prints as a white rectangle on a black shirt, and Gelato does not
-   * catch it — it surfaces on a shirt you already shipped.
+   * Client-side gate so a bad file never reaches the server. The alpha check is
+   * the one that matters: a white box behind the art prints as a white rectangle
+   * on a black shirt, and it only surfaces on a shirt already shipped.
    */
   async function validate(file: File): Promise<string | null> {
-    if (!/\.png$/i.test(file.name) || file.type !== 'image/png') return 'Må være PNG'
+    if (file.type !== 'image/png') return 'Må være PNG'
     if (file.size > 40 * 1024 * 1024) return 'Over 40 MB'
 
     const bitmap = await createImageBitmap(file)
-    if (bitmap.width < 4200 || bitmap.height < 5000) {
-      return `For liten: ${bitmap.width}×${bitmap.height}, trenger 4500×5400`
+    const { width, height } = bitmap
+
+    if (width !== REQUIRED_W || height !== REQUIRED_H) {
+      bitmap.close()
+      return `${width}×${height} — må være ${REQUIRED_W}×${REQUIRED_H}`
     }
 
-    // Sample the corners and edge midpoints; art is centred, so the frame should be clear.
     const canvas = document.createElement('canvas')
-    canvas.width = bitmap.width
-    canvas.height = bitmap.height
+    canvas.width = width
+    canvas.height = height
     const ctx = canvas.getContext('2d')
-    if (!ctx) return null
+    if (!ctx) {
+      bitmap.close()
+      return null
+    }
     ctx.drawImage(bitmap, 0, 0)
-
-    const w = bitmap.width - 1
-    const h = bitmap.height - 1
-    const probes: [number, number][] = [
-      [2, 2], [w - 2, 2], [2, h - 2], [w - 2, h - 2],
-      [Math.floor(w / 2), 2], [Math.floor(w / 2), h - 2],
-      [2, Math.floor(h / 2)], [w - 2, Math.floor(h / 2)],
-    ]
-    const opaque = probes.filter(([x, y]) => ctx.getImageData(x, y, 1, 1).data[3] > 8)
     bitmap.close()
 
-    if (opaque.length >= 5) return 'Bakgrunnen er ikke gjennomsiktig'
+    // Corners and edge midpoints. Art is centred, so the frame should be clear.
+    const w = width - 1
+    const h = height - 1
+    const probes: [number, number][] = [
+      [2, 2], [w - 2, 2], [2, h - 2], [w - 2, h - 2],
+      [w >> 1, 2], [w >> 1, h - 2], [2, h >> 1], [w - 2, h >> 1],
+    ]
+    const opaque = probes.filter(([x, y]) => ctx.getImageData(x, y, 1, 1).data[3] > 8).length
+    if (opaque >= 5) return 'Bakgrunnen er ikke gjennomsiktig'
+
     return null
   }
 
@@ -104,85 +111,71 @@ export default function AdminQueue({ themes, collections, colors, publishedCount
         title: titleFromFilename(file.name),
         themeKey: rows.at(-1)?.themeKey ?? themes[0]?.key ?? '',
         collectionKey: rows.at(-1)?.collectionKey ?? collections[0]?.key ?? '',
-        price: 349,
+        priceKr: 349,
         contrast: 'neutral',
         status: problem ? 'Avvist' : 'Klar',
-        error: problem ?? undefined,
+        note: problem ?? undefined,
       })
     }
+
     setRows((rs) => [...rs, ...next])
     if (fileInput.current) fileInput.current.value = ''
   }
 
   async function publish(schedule: boolean) {
-    const ready = rows.filter((r) => !r.error)
-    if (!ready.length) return
-
-    setBusy(schedule ? 'Planlegger …' : 'Publiserer …')
+    setBusy(true)
     setNotice(null)
 
-    try {
-      // 1. Signed upload URLs
-      setBusy('Laster opp trykkfiler …')
-      const urlRes = await fetch('/api/admin/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: ready.map((r) => ({ name: r.file.name, size: r.file.size })) }),
-      })
-      if (!urlRes.ok) throw new Error((await urlRes.json()).error ?? 'Kunne ikke starte opplasting')
-      const { uploads } = await urlRes.json()
+    let ok = 0
+    let bad = 0
 
-      // 2. Straight to Storage, not through the function
-      for (let i = 0; i < ready.length; i++) {
-        const up = uploads[i]
-        const { error } = await supabase.storage
-          .from('print-files')
-          .uploadToSignedUrl(up.path, up.token, ready[i].file)
-        if (error) throw new Error(`${ready[i].title}: ${error.message}`)
-        ready[i].path = up.path
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      if (row.status !== 'Klar') continue
+
+      edit(i, { status: 'Laster …', note: undefined })
+
+      const body = new FormData()
+      body.set('file', row.file)
+      body.set('title', row.title)
+      body.set('themeKey', row.themeKey)
+      body.set('collectionKey', row.collectionKey)
+      body.set('priceOverrideKr', String(row.priceKr))
+      body.set('contrast', row.contrast)
+      body.set('status', schedule ? 'scheduled' : 'published')
+      if (schedule) body.set('publishAt', tomorrowMorningOslo())
+      body.set('generator', 'Recraft V3')
+
+      try {
+        const res = await fetch('/api/admin/designs', { method: 'POST', body })
+        const json = await res.json().catch(() => ({}))
+
+        if (!res.ok) {
+          edit(i, { status: 'Feilet', note: json.error ?? `HTTP ${res.status}` })
+          bad++
+          continue
+        }
+
+        // The server returns warnings for things it accepted but is unsure about.
+        const warnings: string[] = json.warnings ?? []
+        edit(i, {
+          status: schedule ? 'Planlagt' : 'Publisert',
+          note: warnings.length ? warnings.join(' · ') : undefined,
+        })
+        ok++
+      } catch (e) {
+        edit(i, { status: 'Feilet', note: e instanceof Error ? e.message : 'Nettverksfeil' })
+        bad++
       }
-
-      // 3. Create designs, variants and Gelato products
-      setBusy('Oppretter produkter hos Gelato …')
-      const res = await fetch('/api/admin/designs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rows: ready.map((r) => ({
-            printPath: r.path,
-            title: r.title,
-            themeKey: r.themeKey,
-            collectionKey: r.collectionKey,
-            price: r.price,
-            contrast: r.contrast,
-            schedule,
-          })),
-        }),
-      })
-      if (!res.ok) throw new Error((await res.json()).error ?? 'Publisering feilet')
-      const { created, failed } = await res.json()
-
-      const failedTitles = new Map<string, string>(failed.map((f: any) => [f.title, f.reason]))
-      setRows((rs) =>
-        rs.map((r) =>
-          failedTitles.has(r.title)
-            ? { ...r, status: 'Feilet', error: failedTitles.get(r.title) }
-            : r.error
-              ? r
-              : { ...r, status: schedule ? 'Planlagt' : 'Mangler mockup' }
-        )
-      )
-      setPublished((n) => n + created.length)
-      setNotice(
-        failed.length
-          ? `${created.length} publisert, ${failed.length} feilet. Se radene under.`
-          : `${created.length} design publisert. Mockups kommer om noen minutter.`
-      )
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : 'Noe gikk galt')
-    } finally {
-      setBusy(null)
     }
+
+    setPublished((n) => n + ok)
+    setNotice(
+      bad
+        ? `${ok} publisert, ${bad} feilet. Årsak står på radene.`
+        : `${ok} design ${schedule ? 'planlagt' : 'publisert'}.`
+    )
+    setBusy(false)
   }
 
   const queued = rows.filter((r) => r.status === 'Klar').length
@@ -217,7 +210,7 @@ export default function AdminQueue({ themes, collections, colors, publishedCount
           onClick={() => fileInput.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files) }}
-          style={{ border: `1.5px dashed #c9c2b0`, background: CARD, borderRadius: 3, padding: '44px 32px', textAlign: 'center', cursor: 'pointer', marginBottom: 14 }}
+          style={{ border: '1.5px dashed #c9c2b0', background: CARD, borderRadius: 3, padding: '44px 32px', textAlign: 'center', cursor: 'pointer', marginBottom: 14 }}
         >
           <div style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontSize: 26, marginBottom: 8 }}>
             Slipp trykkfilene her
@@ -225,9 +218,6 @@ export default function AdminQueue({ themes, collections, colors, publishedCount
           <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.6 }}>
             PNG med transparent bakgrunn · 4500 × 5400 px · 300 dpi<br />
             Flere filer om gangen. Filnavnet blir foreslått tittel.
-          </div>
-          <div style={{ fontSize: 11, color: FAINT, marginTop: 12 }}>
-            Mockup lages av Gelato etter publisering.
           </div>
         </div>
 
@@ -268,17 +258,18 @@ export default function AdminQueue({ themes, collections, colors, publishedCount
 
               {rows.map((row, i) => {
                 const allowed = CONTRAST.find((c) => c.key === row.contrast)!.colors
+                const locked = row.status !== 'Klar' && row.status !== 'Avvist'
                 return (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: GRID, gap: 14, padding: '13px 18px', borderBottom: '1px solid #eae4d6', alignItems: 'center' }}>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: GRID, gap: 14, padding: '13px 18px', borderBottom: '1px solid #eae4d6', alignItems: 'center', opacity: locked ? 0.6 : 1 }}>
                     <div style={{ width: 44, height: 52, border: `1px solid ${LINE}`, borderRadius: 2, background: '#e9e3d4' }} />
 
-                    <input value={row.title} onChange={(e) => edit(i, { title: e.target.value })} style={inputStyle} />
+                    <input value={row.title} disabled={locked} onChange={(e) => edit(i, { title: e.target.value })} style={inputStyle} />
 
-                    <select value={row.themeKey} onChange={(e) => edit(i, { themeKey: e.target.value })} style={inputStyle}>
+                    <select value={row.themeKey} disabled={locked} onChange={(e) => edit(i, { themeKey: e.target.value })} style={inputStyle}>
                       {themes.map((t) => <option key={t.key} value={t.key}>{t.name_no}</option>)}
                     </select>
 
-                    <select value={row.collectionKey} onChange={(e) => edit(i, { collectionKey: e.target.value })} style={inputStyle}>
+                    <select value={row.collectionKey} disabled={locked} onChange={(e) => edit(i, { collectionKey: e.target.value })} style={inputStyle}>
                       {collections.map((c) => <option key={c.key} value={c.key}>{c.name_no}</option>)}
                     </select>
 
@@ -288,12 +279,14 @@ export default function AdminQueue({ themes, collections, colors, publishedCount
                           <button
                             key={c.key}
                             title={c.title}
+                            disabled={locked}
                             onClick={() => edit(i, { contrast: c.key })}
                             style={{
                               fontFamily: 'inherit', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
                               background: row.contrast === c.key ? INK : 'transparent',
                               color: row.contrast === c.key ? BG : INK,
-                              border: `1px solid ${LINE}`, borderRadius: 2, padding: '5px 7px', cursor: 'pointer',
+                              border: `1px solid ${LINE}`, borderRadius: 2, padding: '5px 7px',
+                              cursor: locked ? 'default' : 'pointer',
                             }}
                           >
                             {c.label}
@@ -308,7 +301,7 @@ export default function AdminQueue({ themes, collections, colors, publishedCount
                             style={{
                               width: 15, height: 15, borderRadius: '50%', background: c.hex,
                               border: '1px solid #c9c2b0',
-                              opacity: !allowed || allowed.includes(c.key as never) ? 1 : 0.18,
+                              opacity: !allowed || (allowed as readonly string[]).includes(c.key) ? 1 : 0.18,
                             }}
                           />
                         ))}
@@ -316,16 +309,21 @@ export default function AdminQueue({ themes, collections, colors, publishedCount
                     </div>
 
                     <input
-                      value={row.price}
+                      value={row.priceKr}
                       inputMode="numeric"
-                      onChange={(e) => edit(i, { price: Number(e.target.value.replace(/\D/g, '')) || 0 })}
+                      disabled={locked}
+                      onChange={(e) => edit(i, { priceKr: Number(e.target.value.replace(/\D/g, '')) || 0 })}
                       style={inputStyle}
                     />
 
-                    <span title={row.error} style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: statusColor(row.status), lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: statusColor(row.status), lineHeight: 1.4 }}>
                       {row.status}
-                      {row.error && <div style={{ textTransform: 'none', letterSpacing: 0, fontSize: 10, color: '#a75c3c', marginTop: 3 }}>{row.error}</div>}
-                    </span>
+                      {row.note && (
+                        <div style={{ textTransform: 'none', letterSpacing: 0, fontSize: 10, color: '#a75c3c', marginTop: 3 }}>
+                          {row.note}
+                        </div>
+                      )}
+                    </div>
 
                     <button
                       onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
@@ -340,16 +338,16 @@ export default function AdminQueue({ themes, collections, colors, publishedCount
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 26, gap: 24 }}>
               <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.7, maxWidth: 560 }}>
-                Ved publisering: slug fra tittel, <code>generate_variants()</code> lager varianter for de
-                tillatte fargene, og et Gelato-produkt opprettes fra malen. Designet vises i butikken
-                først når mockupen er kopiert inn. Nedtonede prikker selges ikke.
+                Ved publisering: slug fra tittel, mockups komponeres fra trykkfilen, og
+                <code style={{ fontSize: 11 }}> generate_variants()</code> lager varianter for de tillatte
+                fargene. Nedtonede prikker selges ikke.
               </div>
               <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
-                <button onClick={() => publish(true)} disabled={!!busy || !queued} style={secondaryButton(!!busy || !queued)}>
+                <button onClick={() => publish(true)} disabled={busy || !queued} style={button(busy || !queued, false)}>
                   Planlegg til i morgen
                 </button>
-                <button onClick={() => publish(false)} disabled={!!busy || !queued} style={primaryButton(!!busy || !queued)}>
-                  {busy ?? `Publiser ${queued} design nå`}
+                <button onClick={() => publish(false)} disabled={busy || !queued} style={button(busy || !queued, true)}>
+                  {busy ? 'Publiserer …' : `Publiser ${queued} design nå`}
                 </button>
               </div>
             </div>
@@ -374,24 +372,30 @@ const inputStyle: React.CSSProperties = {
   fontSize: 13, padding: '8px 10px', width: '100%', color: INK, outline: 'none',
 }
 
-function primaryButton(disabled: boolean): React.CSSProperties {
+function button(disabled: boolean, primary: boolean): React.CSSProperties {
   return {
-    fontFamily: 'inherit', fontSize: 13, background: INK, color: BG, border: 'none',
-    borderRadius: 2, padding: '13px 26px', cursor: disabled ? 'default' : 'pointer',
-    opacity: disabled ? 0.5 : 1,
-  }
-}
-
-function secondaryButton(disabled: boolean): React.CSSProperties {
-  return {
-    fontFamily: 'inherit', fontSize: 13, background: 'transparent', color: INK,
-    border: `1px solid ${INK}`, borderRadius: 2, padding: '13px 20px',
+    fontFamily: 'inherit', fontSize: 13,
+    background: primary ? INK : 'transparent',
+    color: primary ? BG : INK,
+    border: primary ? 'none' : `1px solid ${INK}`,
+    borderRadius: 2, padding: primary ? '13px 26px' : '13px 20px',
     cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
   }
 }
 
-function statusColor(status: string) {
+function statusColor(status: Row['status']) {
   if (status === 'Publisert' || status === 'Planlagt') return '#4a6b47'
   if (status === 'Klar') return '#7a5c2e'
+  if (status === 'Laster …') return MUTED
   return '#a75c3c'
+}
+
+/** Tomorrow 08:00 Europe/Oslo, as an ISO string. */
+function tomorrowMorningOslo(): string {
+  const now = new Date()
+  const oslo = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Oslo' }))
+  const drift = now.getTime() - oslo.getTime()
+  oslo.setDate(oslo.getDate() + 1)
+  oslo.setHours(8, 0, 0, 0)
+  return new Date(oslo.getTime() + drift).toISOString()
 }

@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase/server'
 import AdminQueue from './AdminQueue'
 
 export const dynamic = 'force-dynamic'

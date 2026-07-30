@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { supabaseServer } from '@/lib/supabase'
+import { supabaseServer } from '@/lib/supabase/server'
 
 /** Magic-link landing point. Exchanges the code for a session cookie, then redirects. */
 export async function GET(req: NextRequest) {

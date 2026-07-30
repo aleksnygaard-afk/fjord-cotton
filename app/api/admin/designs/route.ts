@@ -319,11 +319,14 @@ export async function POST(request: Request) {
   // ── Generate variants (one row per colour × size) ──
   const gen = await db.rpc("generate_variants", { p_design: design.id });
   if (gen.error) {
+    // Roll back the design too. A design with no variants cannot be published,
+    // cannot be ordered, and holds its slug — so leaving it behind means the admin
+    // has to delete the row and the uploaded artwork by hand before retrying.
+    // Every other failure path in this route cleans up; this one did not.
+    await db.from("designs").delete().eq("id", design.id);
+    await cleanupUploads(db, uploaded);
     return NextResponse.json(
-      {
-        error: `design created but variant generation failed: ${gen.error.message}`,
-        design,
-      },
+      { error: `variant generation failed: ${gen.error.message}` },
       { status: 500 },
     );
   }

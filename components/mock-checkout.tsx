@@ -6,8 +6,8 @@ import { localePath } from "@/lib/i18n";
 import { formatKr } from "@/lib/money";
 
 /**
- * Simulated Dintero hosted checkout (mock mode only). Stands in for the real
- * redirect so the order → paid flow is demoable before Dintero onboarding.
+ * Simulated hosted checkout (mock mode only). Stands in for the redirect to
+ * Stripe so the order → paid flow is demoable without Stripe keys.
  * "Betal" drives /api/checkout/mock-complete, which runs the same
  * mark_order_paid path the real webhook would.
  */

@@ -37,27 +37,25 @@ export const env = {
   // Nordic countries only once IOSS / destination VAT is handled.
   checkoutNordics: process.env.CHECKOUT_NORDICS === "true",
 
-  // ── Dintero (03-api-and-payments.md) ──
-  dintero: {
-    accountId: process.env.DINTERO_ACCOUNT_ID ?? "",
-    clientId: process.env.DINTERO_CLIENT_ID ?? "",
-    clientSecret: process.env.DINTERO_CLIENT_SECRET ?? "",
-    profileId: process.env.DINTERO_PROFILE_ID ?? "",
-    webhookSecret: process.env.DINTERO_WEBHOOK_SECRET ?? "",
+  // ── Stripe (03-api-and-payments.md) ──
+  // Hosted Stripe Checkout. The secret key selects the environment: sk_test_… is
+  // test mode, sk_live_… is live. Which payment methods appear (card, Klarna,
+  // Apple/Google Pay) is configured in the Stripe dashboard, not here.
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY ?? "",
+    // From the webhook endpoint in the dashboard (whsec_…). Without it the
+    // webhook rejects every call, because an unverified body must never mark an
+    // order paid.
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? "",
   },
 
-  // Mock mode: simulate the Dintero checkout locally (for building steps 4–5
-  // before the real agreement/BankID onboarding is finished). Auto-on when the
-  // Dintero credentials are absent; can be forced with DINTERO_MOCK=true.
-  get dinteroMock(): boolean {
-    if (process.env.DINTERO_MOCK === "true") return true;
-    if (process.env.DINTERO_MOCK === "false") return false;
-    return !(
-      process.env.DINTERO_ACCOUNT_ID &&
-      process.env.DINTERO_CLIENT_ID &&
-      process.env.DINTERO_CLIENT_SECRET &&
-      process.env.DINTERO_PROFILE_ID
-    );
+  // Mock mode: simulate the hosted checkout locally, for working on the order →
+  // paid → fulfilment flow without Stripe. Auto-on when the secret key is absent;
+  // can be forced either way with STRIPE_MOCK.
+  get stripeMock(): boolean {
+    if (process.env.STRIPE_MOCK === "true") return true;
+    if (process.env.STRIPE_MOCK === "false") return false;
+    return !process.env.STRIPE_SECRET_KEY;
   },
 
   // ── Gelato (04-gelato-fulfilment.md) ──

@@ -72,8 +72,8 @@ export default async function TermsPage({
       </p>
       <p>
         {t(
-          "Betaling skjer via vår betalingsleverandør Dintero, som tilbyr Vipps, Klarna, kort (Visa/Mastercard) og Apple Pay / Google Pay. Beløpet trekkes når bestillingen bekreftes.",
-          "Payment is handled by our provider Dintero, offering Vipps, Klarna, card (Visa/Mastercard) and Apple Pay / Google Pay. The amount is charged when the order is confirmed.",
+          "Betaling skjer via vår betalingsleverandør Stripe, som tilbyr kort (Visa/Mastercard), Klarna og Apple Pay / Google Pay. Beløpet trekkes når bestillingen bekreftes.",
+          "Payment is handled by our provider Stripe, offering card (Visa/Mastercard), Klarna and Apple Pay / Google Pay. The amount is charged when the order is confirmed.",
         )}
       </p>
 

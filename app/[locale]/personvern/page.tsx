@@ -51,7 +51,7 @@ export default async function PrivacyPage({
       <h2>{t("Databehandlere", "Processors")}</h2>
       <p>{t("Vi deler opplysninger med følgende databehandlere, kun i den grad det er nødvendig:", "We share data with the following processors, only as necessary:")}</p>
       <ul>
-        <li>{t("Dintero (betaling)", "Dintero (payment)")}</li>
+        <li>{t("Stripe (betaling)", "Stripe (payment)")}</li>
         <li>{t("Gelato (navn og adresse for produksjon og forsendelse)", "Gelato (name and address for production and shipping)")}</li>
         <li>{t("Vår e-postleverandør (kvitteringer og kundeservice)", "Our email provider (receipts and customer service)")}</li>
         <li>{t("Supabase (database/lagring) og Vercel (drift) – begge i EU/EØS", "Supabase (database/storage) and Vercel (hosting) – both in the EU/EEA")}</li>

@@ -8,7 +8,7 @@
 // seg ellers for ekte til testadressen i denne fila — en oppdiktet adresse som
 // bouncer, og det går ut over omdømmet til sendedomenet.
 //
-// Krever mock-modus for Dintero (ingen DINTERO_*-nøkler, eller DINTERO_MOCK=true):
+// Krever mock-modus for Stripe (ingen STRIPE_SECRET_KEY, eller STRIPE_MOCK=true):
 // /api/checkout/mock-complete er slått av når ekte nøkler finnes, og kjører ellers
 // samme mark_order_paid som webhooken.
 //
@@ -96,7 +96,7 @@ const kasse = await fetch(`${APP}/api/checkout/session`, {
     items: [{ variantId: variant.id, qty: ANTALL }],
     ...KJØPER,
     shippingMethod: 'home',
-    paymentMethod: 'vipps',
+    paymentMethod: 'card',
     consent: true,
     locale: 'no',
   }),
@@ -108,11 +108,24 @@ if (!sjekk(kasse.status === 200, `checkout/session (${kasse.status})`, kasseJson
 }
 
 spor.orderNo = kasseJson.orderNo;
-const token = new URL(kasseJson.redirectUrl).searchParams.get('t');
-sjekk(Boolean(spor.orderNo && token), `ordre ${spor.orderNo}, access_token utdelt`);
-sjekk(String(kasseJson.redirectUrl).includes('/betaling/'), 'mock-modus omdirigerer til /betaling/');
 
-const [ordre] = await sel(`orders?order_no=eq.${spor.orderNo}&select=id,status,total,subtotal,shipping,vat_amount,vat_rate,currency,gelato_status`);
+// To moduser. Uten STRIPE_SECRET_KEY omdirigerer ruten til den lokale
+// betalingssimuleringen; med en nøkkel opprettes en ekte Stripe-sesjon. Tokenet
+// leses fra basen, ikke ut av URL-en, nettopp fordi den peker to steder.
+const erMock = String(kasseJson.redirectUrl).includes('/betaling/');
+console.log(`   modus: ${erMock ? 'mock (ingen STRIPE_SECRET_KEY)' : 'ekte Stripe-sesjon'}`);
+
+const [ordre] = await sel(
+  `orders?order_no=eq.${spor.orderNo}&select=id,status,total,subtotal,shipping,vat_amount,vat_rate,currency,gelato_status,access_token,payment_session_id`,
+);
+const token = ordre?.access_token;
+sjekk(Boolean(spor.orderNo && token), `ordre ${spor.orderNo}, access_token utdelt`);
+sjekk(
+  erMock
+    ? String(kasseJson.redirectUrl).includes('/betaling/')
+    : /^https:\/\/checkout\.stripe\.com\//.test(kasseJson.redirectUrl),
+  erMock ? 'mock omdirigerer til /betaling/' : 'omdirigerer til checkout.stripe.com',
+);
 sjekk(ordre?.status === 'pending', 'ordren er pending', String(ordre?.status));
 // Etter 0010 skal en fersk rad få 'pending' av seg selv. Er den NULL, avviser
 // claim_gelato_job hver innsending i stillhet — det var feilen 0010 fikset.
@@ -138,32 +151,67 @@ const kurvlinjer = await sel(`cart_lines?variant_id=eq.${variant.id}&select=cart
 spor.cartId = kurvlinjer[0]?.cart_id ?? null;
 
 // ── 3. Betaling ─────────────────────────────────────────────────────────────
-// mock-complete kjører samme mark_order_paid som Dintero-webhooken, og de samme
-// after()-jobbene: innsending til Gelato og kvittering.
-async function betal() {
-  const res = await fetch(`${APP}/api/checkout/mock-complete`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ orderNo: spor.orderNo, t: token }),
-  });
-  return { status: res.status, json: await res.json().catch(() => ({})) };
+if (!erMock) {
+  // Ekte nøkkel: betalingen kan ikke fullføres herfra — den krever Stripes hostede
+  // side. Det som KAN verifiseres er at sesjonen vi sendte er riktig, og det er der
+  // feilene sitter: beløp i feil enhet, manglende ordrereferanse, feil språkkode.
+  // Hentes fra Stripe, ikke fra vår egen kode, så det er Stripes tolkning vi ser.
+  const nøkkel = process.env.STRIPE_SECRET_KEY;
+  sjekk(Boolean(ordre?.payment_session_id), 'payment_session_id lagret på ordren', ordre?.payment_session_id ?? '');
+
+  const res = await fetch(
+    `https://api.stripe.com/v1/checkout/sessions/${ordre.payment_session_id}?expand[]=line_items`,
+    { headers: { Authorization: `Bearer ${nøkkel}` } },
+  );
+  const s = await res.json().catch(() => ({}));
+  if (sjekk(res.ok, `hentet sesjonen fra Stripe (${res.status})`, s.error?.message ?? '')) {
+    sjekk(s.amount_total === ordre.total, `amount_total ${s.amount_total} = orders.total ${ordre.total}`, 'øre i begge ender');
+    sjekk(s.currency === 'nok', `valuta ${s.currency}`);
+    sjekk(s.client_reference_id === spor.orderNo, `client_reference_id ${s.client_reference_id}`);
+    sjekk(s.metadata?.order_no === spor.orderNo, `metadata.order_no ${s.metadata?.order_no}`);
+    sjekk(s.locale === 'nb', `locale ${s.locale}`, 'Stripe har nb, ikke no');
+    sjekk(s.customer_email === KJØPER.email, `customer_email ${s.customer_email}`);
+    sjekk(s.payment_status === 'unpaid' && s.status === 'open', `sesjonen er åpen og ubetalt (${s.status}/${s.payment_status})`);
+    const poster = s.line_items?.data ?? [];
+    const sum = poster.reduce((n, l) => n + l.amount_total, 0);
+    sjekk(sum === ordre.total, `${poster.length} linjepost(er), sum ${sum} = total`, poster.map((l) => l.description).join(' · '));
+  }
+
+  console.log(
+    '\n   Betalingen selv må gjennom Stripes side. For å kjøre resten av kjeden:\n' +
+      `     åpne ${kasseJson.redirectUrl}\n` +
+      '     kort 4242 4242 4242 4242, hvilken som helst fremtidig dato og CVC\n' +
+      '     og ha «stripe listen --forward-to localhost:3000/api/webhooks/stripe» i gang\n' +
+      '   Eller kjør denne testen mot en dev-server med STRIPE_MOCK=true for hele kjeden.',
+  );
+} else {
+  // mock-complete kjører samme mark_order_paid som Stripe-webhooken, og de samme
+  // after()-jobbene: innsending til Gelato og kvittering.
+  const betal = async () => {
+    const res = await fetch(`${APP}/api/checkout/mock-complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderNo: spor.orderNo, t: token }),
+    });
+    return { status: res.status, json: await res.json().catch(() => ({})) };
+  };
+
+  const betaling = await betal();
+  sjekk(betaling.status === 200, `mock-complete (${betaling.status})`, betaling.json.error ?? '');
+
+  // Jobbene kjører i after(), altså etter svaret.
+  await new Promise((r) => setTimeout(r, 5000));
+
+  const [etter] = await sel(`orders?order_no=eq.${spor.orderNo}&select=status,paid_at,payment_transaction_id,gelato_status,gelato_order_id,gelato_attempts,gelato_last_error`);
+  sjekk(etter?.status === 'paid', 'ordren er paid', String(etter?.status));
+  sjekk(Boolean(etter?.paid_at), 'paid_at satt');
+  sjekk(Boolean(etter?.payment_transaction_id), 'transaksjons-ID lagret', etter?.payment_transaction_id ?? '');
+  sjekk(etter?.gelato_status === 'submitted', `gelato_status ${etter?.gelato_status}`, etter?.gelato_last_error ?? (etter?.gelato_status === 'pending' ? 'claimet gikk ikke gjennom' : ''));
+  sjekk(String(etter?.gelato_order_id ?? '').startsWith('mock-'), 'innsendt som mock-ordre', etter?.gelato_order_id ?? '');
+
+  const retry = await betal();
+  sjekk(retry.status === 200 && retry.json.result?.status === 'already_paid', 'retry betaler ikke på nytt', retry.json.result?.status ?? '');
 }
-
-const betaling = await betal();
-sjekk(betaling.status === 200, `mock-complete (${betaling.status})`, betaling.json.error ?? '');
-
-// Jobbene kjører i after(), altså etter svaret.
-await new Promise((r) => setTimeout(r, 5000));
-
-const [etter] = await sel(`orders?order_no=eq.${spor.orderNo}&select=status,paid_at,dintero_transaction_id,gelato_status,gelato_order_id,gelato_attempts,gelato_last_error`);
-sjekk(etter?.status === 'paid', 'ordren er paid', String(etter?.status));
-sjekk(Boolean(etter?.paid_at), 'paid_at satt');
-sjekk(Boolean(etter?.dintero_transaction_id), 'transaksjons-ID lagret', etter?.dintero_transaction_id ?? '');
-sjekk(etter?.gelato_status === 'submitted', `gelato_status ${etter?.gelato_status}`, etter?.gelato_last_error ?? (etter?.gelato_status === 'pending' ? 'claimet gikk ikke gjennom' : ''));
-sjekk(String(etter?.gelato_order_id ?? '').startsWith('mock-'), 'innsendt som mock-ordre', etter?.gelato_order_id ?? '');
-
-const retry = await betal();
-sjekk(retry.status === 200 && retry.json.result?.status === 'already_paid', 'retry betaler ikke på nytt', retry.json.result?.status ?? '');
 
 // ── 4. Kundens sider ────────────────────────────────────────────────────────
 const side = await fetch(`${APP}/no/ordre/${spor.orderNo}?t=${token}`);

@@ -25,8 +25,8 @@ import {
  *
  * The "Betal" button here is UI only. Real payment is build-order step 4: it
  * will POST /api/checkout/session (which re-prices server-side, inserts a
- * pending order with a sequential order_no, and creates the Dintero session)
- * and redirect to Dintero. For now it generates a placeholder order number,
+ * pending order with a sequential order_no, and creates the Stripe session)
+ * and redirect to Stripe. For now it generates a placeholder order number,
  * clears the cart and shows the confirmation screen.
  */
 export function CheckoutView({
@@ -53,7 +53,7 @@ export function CheckoutView({
     country: "NO",
   });
   const [ship, setShip] = useState<ShippingMethod>("pickup");
-  const [pay, setPay] = useState<PaymentMethod>("vipps");
+  const [pay, setPay] = useState<PaymentMethod>("card");
   const [consent, setConsent] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -91,7 +91,7 @@ export function CheckoutView({
     setSubmitting(true);
     setSubmitError(null);
     try {
-      // Server re-prices from variants, creates the pending order and the Dintero
+      // Server re-prices from variants, creates the pending order and the Stripe
       // session (or a mock one), and returns the redirect URL. We send only
       // variant ids + quantities — never prices. The cart is cleared on the
       // confirmation page once the order is confirmed paid, so returning from a

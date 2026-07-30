@@ -67,7 +67,7 @@ for (const [fn, args] of [
   ['catalog_facets', {}],
   // Hele kassen og betalingen henger på disse tre. De manglet i basen mens alt
   // annet var på plass, fordi 0006 ikke var kjørt — og ingenting oppdaget det før
-  // en POST mot /api/webhooks/dintero svarte 500 i produksjon.
+  // en POST mot betalingswebhooken svarte 500 i produksjon.
   ['next_order_no', {}],
   // Alle 13 argumentene må med: PostgREST slår opp funksjoner på argumentnavn, så
   // et delvis kall gir PGRST202 selv om funksjonen finnes. Tom kurv → exception
@@ -83,7 +83,7 @@ for (const [fn, args] of [
     p_city: 'Oslo',
     p_country: 'NO',
     p_shipping_method: 'pickup',
-    p_payment_method: 'vipps',
+    p_payment_method: 'card',
     p_consent: true,
     p_vat_registered: false,
   }],
@@ -106,7 +106,8 @@ const kolonner = [
   ['0007_fulfillment', 'orders', 'gelato_submitted_at'],
   ['0007_fulfillment', 'orders', 'gelato_claimed_at'],
   ['0006_orders', 'orders', 'access_token'],
-  ['0001_schema', 'orders', 'dintero_transaction_id'],
+  ['0011_payment_provider_neutral', 'orders', 'payment_transaction_id'],
+  ['0011_payment_provider_neutral', 'orders', 'payment_session_id'],
   ['0001_schema', 'orders', 'gelato_order_id'],
   ['0001_schema', 'orders', 'tracking_url'],
   ['0001_schema', 'cart_lines', 'variant_id'],

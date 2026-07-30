@@ -43,6 +43,14 @@ Do **not** integrate Vipps ePayment, Klarna and Stripe separately. Dintero bundl
 behind one API, one contract and one payout, which is a large reduction in build and compliance
 work for a one-person business.
 
+> **Decision revisited: the shop now runs on Stripe Checkout, not Dintero.**
+> The reasoning above still holds, and the cost of overriding it is concrete: Stripe
+> does not offer **Vipps**, which is how most Norwegian customers expect to pay.
+> Card, Klarna and Apple/Google Pay are covered. Adding Vipps later means a separate
+> integration against Vipps ePayment API — `lib/payments.ts` is where it plugs in.
+> Implementation: `lib/stripe.ts`, `app/api/webhooks/stripe/route.ts`, migration
+> `0011`. See `SETUP.md` for keys, webhook events and test mode.
+
 ## What is in this package
 
 | File | Contents |

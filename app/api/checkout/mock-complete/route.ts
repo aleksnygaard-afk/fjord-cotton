@@ -9,10 +9,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/checkout/mock-complete — mock-mode only. Simulates the Dintero
+ * POST /api/checkout/mock-complete — mock-mode only. Simulates the Stripe
  * webhook's successful authorisation by driving the SAME mark_order_paid path,
  * so the order → paid state machine is exercised identically to production.
- * Disabled entirely when real Dintero credentials are configured.
+ * Disabled entirely when a real STRIPE_SECRET_KEY is configured.
  */
 const Body = z.object({
   orderNo: z.string().min(1),
@@ -20,7 +20,7 @@ const Body = z.object({
 });
 
 export async function POST(request: Request) {
-  if (!env.dinteroMock) {
+  if (!env.stripeMock) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 

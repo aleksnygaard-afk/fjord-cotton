@@ -2,15 +2,15 @@
 
 The running implementation of the store in `README.md`, on the recommended stack:
 **Next.js (App Router) + TypeScript**, **Supabase** (Postgres + Storage),
-**Dintero** payments, **Gelato** fulfilment, **Sharp** mockups, **Resend** email,
+**Stripe** payments, **Gelato** fulfilment, **Sharp** mockups, **Resend** email,
 deployed on **Vercel**.
 
 **All seven build-order steps are implemented:** (1) schema + admin upload,
 (2) catalog + product pages with `/no`·`/en` i18n, (3) cart + checkout,
-(4) Dintero orders, (5) Gelato fulfilment, (6) legal pages + receipts,
+(4) Stripe orders, (5) Gelato fulfilment, (6) legal pages + receipts,
 (7) go-live (Norway-only default, launch-check, SEO, hardening).
 
-Dintero, Gelato and email each have a **mock mode** (on when their keys are
+Stripe, Gelato and email each have a **mock mode** (on when their keys are
 absent), so the entire purchase flow — add to cart → pay → order paid → Gelato
 submitted → receipt — runs offline with only a Supabase project. Configure the
 real keys and flip `VAT_REGISTERED=true` to go live.
@@ -102,7 +102,7 @@ Storefront (build-order step 2), server-rendered with `/no` and `/en` routes
 - `/no/ordre/[orderNo]` — order confirmation
 - `/admin/upload` — the admin upload flow (step 1)
 
-## Payments — Dintero (step 4): test mode vs mock mode
+## Payments — Stripe (step 4): test mode vs mock mode
 
 Checkout is wired end to end. The "Betal" button POSTs `/api/checkout/session`,
 which **re-prices the cart server-side from `variants`** (the client only sends
@@ -110,30 +110,53 @@ variant ids + quantities — never prices), inserts a `pending` order with a
 **sequential** `order_no` (`FC-YYYY-######`) and a frozen line snapshot, then
 creates the payment session and returns a redirect URL.
 
-Payment becomes `paid` in exactly one place: `POST /api/webhooks/dintero`. It is
+Payment becomes `paid` in exactly one place: `POST /api/webhooks/stripe`. It is
 idempotent (safe on retries) and rejects any authorised amount that doesn't equal
 `orders.total`. The browser return URL is only a UI convenience.
 
 Two ways to run it:
 
-- **Mock mode (default when Dintero credentials are absent).** The session
+- **Mock mode (default when `STRIPE_SECRET_KEY` is absent).** The session
   redirects to an internal simulated checkout at `/[locale]/betaling/[orderNo]`.
   "Betal" calls `/api/checkout/mock-complete`, which drives the **same**
   `mark_order_paid` path the real webhook uses, then returns to the confirmation
   page — which polls `/api/orders/[orderNo]` (token-guarded) and shows "behandler
   betaling" until it flips to paid. This lets you test the whole order flow with
-  only Supabase — no Dintero onboarding needed.
-- **Real test mode.** Put your Dintero **test** credentials (`DINTERO_*`) in
-  `.env.local`. The session then creates a real Dintero checkout and redirects
-  there; Vipps/Klarna/card test flows call the webhook. Set `DINTERO_WEBHOOK_SECRET`
-  to enable HMAC verification, and the webhook re-fetches the transaction from
-  Dintero rather than trusting the callback body.
+  only Supabase — no Stripe account needed.
+- **Real test mode.** Put `STRIPE_SECRET_KEY=sk_test_…` in `.env.local`. The
+  session then creates a real Stripe Checkout session and redirects there; the
+  card test numbers and Klarna's test flow call the webhook.
 
-> The exact Dintero request/response shapes and the callback signature scheme
-> should be reconfirmed against the current Dintero docs during onboarding
-> (`lib/dintero.ts`, `app/api/webhooks/dintero/route.ts` note this). Gelato
-> submission (step 5) and the receipt email (step 6) are `TODO` hooks fired right
-> after the first successful `paid` transition.
+  The webhook needs `STRIPE_WEBHOOK_SECRET`, and without it every call is
+  rejected — nothing becomes paid. Locally, get both the endpoint and the secret
+  from the Stripe CLI:
+
+  ```bash
+  stripe listen --forward-to localhost:3000/api/webhooks/stripe
+  # prints: whsec_… → paste into STRIPE_WEBHOOK_SECRET, restart the dev server
+  ```
+
+  In the dashboard (Developers → Webhooks) the endpoint is
+  `https://<your-domain>/api/webhooks/stripe` and it needs exactly three events:
+
+  ```
+  checkout.session.completed
+  checkout.session.async_payment_succeeded
+  checkout.session.async_payment_failed
+  ```
+
+  The two `async_*` events matter for Klarna: the session completes before the
+  money is confirmed, so `checkout.session.completed` can arrive with
+  `payment_status: unpaid`. The webhook waits for the async event rather than
+  submitting a print order for a payment that can still fail.
+
+> Which methods appear in the hosted checkout — card, Klarna, Apple/Google Pay —
+> is configured in the Stripe dashboard, not in code.
+>
+> **Stripe does not offer Vipps**, which is the most common payment method in
+> Norway. `lib/payments.ts` is the seam where a separate Vipps ePayment
+> integration plugs in; the order, the amounts and `mark_order_paid()` do not
+> change when it does.
 
 ### Test checklist (from 03), once Supabase is configured
 
@@ -201,7 +224,7 @@ standard template before go-live:
   reklamasjon, dispute resolution (Forbrukertilsynet / Forbrukerrådet / EU ODR)
 - `/angrerett` — the 14-day rules, how to return, who pays return postage; and
   `/angrerett/skjema` — the standardised **Angrerettskjema** (print → save as PDF)
-- `/personvern` — data, purpose, legal basis, processors (Dintero, Gelato, email,
+- `/personvern` — data, purpose, legal basis, processors (Stripe, Gelato, email,
   Supabase, Vercel — EU/EEA), 5-year retention, rights, cookies note
 - `/frakt` — carriers, prices, times, free-shipping threshold
 
@@ -300,7 +323,7 @@ rendering, and the order state machine (`create_order` → session →
 `mark_order_paid` → confirmation). Configure Supabase + apply the migrations,
 then in **mock mode** you can walk the full purchase offline: upload a published
 design, add to cart, checkout, click "Betal" on the simulated page, and watch the
-confirmation flip to paid. The **real** Dintero API is untested here (onboarding
+confirmation flip to paid. The **real** Stripe API is untested here (no account
 needs org.nr + BankID).
 
 ## Project layout
@@ -314,15 +337,15 @@ app/
   [locale]/design/[slug]/page.tsx          # product (SSR, generateMetadata)
   [locale]/handlekurv/page.tsx             # cart
   [locale]/kasse/page.tsx                  # checkout
-  [locale]/betaling/[orderNo]/page.tsx     # mock Dintero checkout (test mode)
+  [locale]/betaling/[orderNo]/page.tsx     # mock hosted checkout (test mode)
   [locale]/ordre/[orderNo]/page.tsx        # order confirmation (polls status)
   [locale]/salgsbetingelser | angrerett(/skjema) | personvern | frakt  # legal pages
   admin/upload/page.tsx                    # drag-and-drop upload UI
   api/designs, api/designs/[slug],         # storefront read API (cursor-paginated)
   api/collections, api/facets
-  api/checkout/session                     # create order + Dintero/mock session
+  api/checkout/session                     # create order + Stripe/mock session
   api/checkout/mock-complete               # mock-mode payment completion
-  api/webhooks/dintero                     # THE place an order becomes paid → enqueues Gelato
+  api/webhooks/stripe                      # THE place an order becomes paid → enqueues Gelato
   api/webhooks/gelato                      # production/shipping status → in_production/shipped
   api/orders/[orderNo]                     # token-guarded confirmation data
   api/cron/gelato                          # fulfilment retry (CRON_SECRET)
@@ -343,7 +366,8 @@ lib/
   catalog.ts                               # server reads (anon client, keyset paging)
   catalog-format.ts                        # client-safe types + pure helpers
   cart-totals.ts                           # shipping/VAT rules, payment methods
-  dintero.ts                               # Dintero client (token/session/txn) + mock
+  stripe.ts                                # Stripe Checkout client + event verification
+  payments.ts                              # which provider handles which method
   gelato.ts                                # Gelato client + UID resolver + mock
   fulfillment.ts                           # submitGelatoForOrder — the background job
   email.ts                                 # Resend + receipt HTML + ops alert (+ mock)
@@ -370,7 +394,7 @@ changed later and Norwegian data should stay in the EU/EEA. Set every variable
 from `.env.example` in the Vercel project (production), including `CRON_SECRET`
 (Vercel Cron sends it as a Bearer token to `/api/cron/gelato`, scheduled in
 `vercel.json`). Set `NEXT_PUBLIC_SITE_URL` to the real **https** origin, and
-register that origin's webhook URLs in the Dintero and Gelato dashboards.
+register that origin's webhook URLs in the Stripe and Gelato dashboards.
 
 **Launch is Norway-only by default** (`CHECKOUT_NORDICS=false`) — the compliant
 choice (05). Checkout offers only Norway and the session route rejects other
@@ -381,7 +405,7 @@ destination VAT is handled.
 
 ```bash
 curl -s https://<site>/api/admin/launch-check -H "x-admin-token: $ADMIN_TOKEN" | jq
-# → { ready: false, blockers: ["Dintero in mock mode …", "Gelato UID missing …"], checks: {…} }
+# → { ready: false, blockers: ["Stripe in mock mode …", "Gelato UID missing …"], checks: {…} }
 ```
 
 `ready: true` means nothing is still in mock mode, the Gelato product mapping is
@@ -395,7 +419,8 @@ both locales. Product pages are SSR with per-design titles and `metadataBase`.
 
 - [ ] VAT registration approved → `VAT_REGISTERED=true` (org.nr gains the MVA
       suffix; VAT rows + amounts reappear in cart/checkout/receipt)
-- [ ] Dintero agreement signed → production `DINTERO_*` + `DINTERO_WEBHOOK_SECRET`
+- [ ] Stripe account live → `STRIPE_SECRET_KEY=sk_live_…` + a production webhook
+      endpoint with its own `STRIPE_WEBHOOK_SECRET`
 - [ ] Gelato product UIDs in `garment_colors.gelato_variant_key`, real
       `GELATO_API_KEY` + `GELATO_WEBHOOK_SECRET`
 - [ ] `RESEND_API_KEY` + verified `EMAIL_FROM`; test a real receipt

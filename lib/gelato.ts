@@ -4,7 +4,7 @@ import { env } from "@/lib/env";
 /**
  * Minimal Gelato Order API client (04-gelato-fulfilment.md). Account setup is
  * self-service (no signed agreement), so this can be built and tested in parallel
- * with Dintero. When GELATO_API_KEY is absent we run in mock mode.
+ * with Stripe. When GELATO_API_KEY is absent we run in mock mode.
  *
  * Note we do NOT use Gelato's ecommerce API (templates / products / mockups):
  * mockups are composited locally in lib/mockup.ts, which is both better looking

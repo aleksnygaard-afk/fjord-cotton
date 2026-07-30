@@ -8,7 +8,7 @@ import { localePath } from "@/lib/i18n";
 
 /**
  * Order confirmation body (01-design-spec.md §7). Polls the token-guarded
- * /api/orders/[orderNo] until the Dintero webhook has flipped the order to
+ * /api/orders/[orderNo] until the Stripe webhook has flipped the order to
  * 'paid' — showing "behandler betaling" meanwhile (03, step 5 of the flow).
  * Clears the local cart once the order is confirmed paid.
  */

@@ -1,3 +1,11 @@
+> **Superseded in part: payments run on Stripe Checkout, not Dintero.**
+> The flow in this document is unchanged — server-side re-pricing, a pending order
+> with a sequential number, one webhook as the only path to `paid`, idempotent
+> `mark_order_paid`, amount verified against `orders.total`. Only the provider and
+> the shape of its requests differ. Read this for the flow; read `lib/stripe.ts`
+> and `app/api/webhooks/stripe/route.ts` for what is actually called. Note that
+> Stripe has no Vipps.
+
 # API routes and the Dintero payment flow
 
 ## Why Dintero

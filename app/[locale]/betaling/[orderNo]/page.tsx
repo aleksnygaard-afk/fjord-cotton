@@ -5,9 +5,9 @@ import { MockCheckout } from "@/components/mock-checkout";
 export const dynamic = "force-dynamic";
 
 /**
- * Mock Dintero checkout (test mode). Reached only via the session route's mock
- * redirect. In production (real Dintero credentials) the customer is redirected
- * to Dintero's hosted checkout instead and never lands here.
+ * Mock hosted checkout (test mode). Reached only via the session route's mock
+ * redirect. In production (real Stripe keys) the customer is redirected to
+ * Stripe Checkout instead and never lands here.
  */
 export default async function MockPaymentPage({
   params,

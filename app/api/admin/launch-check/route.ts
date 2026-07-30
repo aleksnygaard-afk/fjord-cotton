@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { isAuthorizedAdmin } from "@/lib/admin-auth";
 import { env } from "@/lib/env";
-import { dinteroConfigured } from "@/lib/dintero";
+import { stripeConfigured, stripeTestMode } from "@/lib/stripe";
 import { gelatoConfigured } from "@/lib/gelato";
 
 export const runtime = "nodejs";
@@ -52,7 +52,11 @@ export async function GET(request: Request) {
 
   const checks = {
     vatRegistered: env.vatRegistered,
-    dintero: { configured: dinteroConfigured(), live: !env.dinteroMock },
+    stripe: {
+      configured: stripeConfigured(),
+      live: !env.stripeMock,
+      testMode: stripeTestMode(),
+    },
     gelato: {
       configured: gelatoConfigured(),
       live: !env.gelatoMock,
@@ -70,7 +74,14 @@ export async function GET(request: Request) {
   const blockers: string[] = [];
   if (!checks.vatRegistered)
     blockers.push("VAT not registered (VAT_REGISTERED=false) — do not charge VAT.");
-  if (env.dinteroMock) blockers.push("Dintero in mock mode — set production keys.");
+  if (env.stripeMock)
+    blockers.push("Stripe in mock mode — set STRIPE_SECRET_KEY.");
+  if (!env.stripeMock && !env.stripe.webhookSecret)
+    blockers.push(
+      "STRIPE_WEBHOOK_SECRET missing — the webhook rejects every call, so no order becomes paid.",
+    );
+  if (!env.stripeMock && stripeTestMode())
+    blockers.push("Stripe is on test keys (sk_test_…) — no real money moves.");
   if (env.gelatoMock) blockers.push("Gelato in mock mode — set GELATO_API_KEY.");
   if (!mappingComplete)
     blockers.push(

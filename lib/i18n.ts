@@ -188,11 +188,11 @@ const messages = {
       "Vi venter på bekreftelse fra betalingsleverandøren. Denne siden oppdaterer seg automatisk.",
     confNotFound: "Fant ikke ordren.",
 
-    // Mock Dintero checkout (test mode)
-    mockEyebrow: "Dintero — testmodus",
+    // Mock hosted checkout (test mode)
+    mockEyebrow: "Stripe — testmodus",
     mockTitle: "Simulert betaling",
     mockBody:
-      "Ekte Dintero-betaling kobles til med testnøkler. Her kan du simulere resultatet.",
+      "Ekte Stripe-betaling kobles til med testnøkler. Her kan du simulere resultatet.",
     mockPay: "Betal",
     mockCancel: "Avbryt",
     mockAmount: "Å betale",
@@ -362,11 +362,11 @@ const messages = {
       "We're waiting for confirmation from the payment provider. This page updates automatically.",
     confNotFound: "Order not found.",
 
-    // Mock Dintero checkout (test mode)
-    mockEyebrow: "Dintero — test mode",
+    // Mock hosted checkout (test mode)
+    mockEyebrow: "Stripe — test mode",
     mockTitle: "Simulated payment",
     mockBody:
-      "Real Dintero payment connects with test keys. Here you can simulate the outcome.",
+      "Real Stripe payment connects with test keys. Here you can simulate the outcome.",
     mockPay: "Pay",
     mockCancel: "Cancel",
     mockAmount: "To pay",

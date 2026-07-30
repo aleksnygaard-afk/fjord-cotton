@@ -58,5 +58,9 @@ client secret. Legg dette i `.gitignore`:
 dintero_credentials*
 ```
 
-Er filen allerede pushet til GitHub, ligger nøkkelen i historikken. Da må du lage nye
-Dintero-nøkler. Sjekk repoet på github.com før du gjør noe annet.
+Er filen allerede pushet til GitHub, ligger nøkkelen i historikken. Da må du rotere
+den hos leverandøren — det er det eneste som faktisk lukker hullet. Sjekk repoet på
+github.com før du gjør noe annet.
+
+Butikken bruker nå Stripe, ikke Dintero, men den gamle Dintero-legitimasjonen bør
+roteres uansett så lenge den ligger lesbar i historikken.

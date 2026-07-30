@@ -22,13 +22,13 @@ for the *why*; read this for the *what was built* and *how it fits together*.
 | Styling | Design tokens in `app/globals.css` (inline styles + a few utility classes) |
 | Database | Postgres via Supabase (RLS; anon reads, service-role writes) |
 | Storage | Supabase Storage — `print-files` (private), `mockups` (public) |
-| Payments | Dintero Checkout (Vipps · Klarna · card · Apple/Google Pay) |
+| Payments | Stripe Checkout, hosted (card · Klarna · Apple/Google Pay — **no Vipps**) |
 | Fulfilment | Gelato Order API (printed in Oslo) |
 | Images | Sharp — mockups composited on upload |
 | Email | Resend — receipts + ops alerts |
 | Hosting | Vercel (+ Vercel Cron) |
 
-**Mock mode is the headline dev feature:** Dintero, Gelato and Resend each fall
+**Mock mode is the headline dev feature:** Stripe, Gelato and Resend each fall
 back to a local simulation when their keys are absent. The entire purchase flow —
 add to cart → pay → order paid → Gelato submitted → receipt — runs offline with
 **only a Supabase project**. Flip in the real keys to go live.
@@ -40,7 +40,7 @@ add to cart → pay → order paid → Gelato submitted → receipt — runs off
 ```bash
 npm install
 cp .env.example .env.local        # fill in Supabase; leave provider keys blank for mock mode
-# apply supabase/migrations/0001–0010 (SQL editor or `supabase db push`)
+# apply supabase/migrations/0001–0011 (SQL editor or `supabase db push`)
 npm run dev                        # http://localhost:3000 → /no
 ```
 
@@ -81,7 +81,12 @@ deletes everything afterwards. Use `APP_URL=http://localhost:3100` for another p
 
 `test-kasse.mjs` covers what the publishing test cannot reach: cart → order → paid →
 Gelato submission → the confirmation page with and without its token, including the
-amounts, the free-shipping threshold and webhook idempotency. Start the dev server
+amounts, the free-shipping threshold and webhook idempotency. It adapts to the mode
+it finds: with `STRIPE_SECRET_KEY` set it creates a real Checkout session and verifies
+it by reading it back **from Stripe** — amount in øre, currency, order reference in
+both `client_reference_id` and metadata, `locale: nb`, line items summing to the total
+— then stops, because completing the payment needs Stripe's hosted page. Run the dev
+server with `STRIPE_MOCK=true` to exercise the whole chain through to fulfilment. Start the dev server
 with `EMAIL_MOCK=true` — otherwise the receipt is really sent to the fake address in
 the script, and a bounce costs the sending domain reputation. Two bugs found by this
 script alone, both invisible until an order was carried all the way to paid:
@@ -117,11 +122,11 @@ POST /api/checkout/session
        • re-prices every line from `variants` (never trusts the client)
        • shipping + VAT rules, sequential order_no (FC-YYYY-######)
        • inserts order + frozen order_lines snapshot, mints access_token
-  └─ Dintero session  (or mock → /[locale]/betaling/[orderNo])
+  └─ Stripe Checkout session  (or mock → /[locale]/betaling/[orderNo])
         │  redirect
         ▼
-POST /api/webhooks/dintero          ← the ONLY place status becomes 'paid'
-  • verify signature + amount == orders.total
+POST /api/webhooks/stripe           ← the ONLY place status becomes 'paid'
+  • constructEvent() verifies the signature over the raw body; amount == orders.total
   • mark_order_paid() — idempotent, atomic pending→paid
   • after(): submit Gelato + send receipt   (background, never inline)
         │
@@ -169,7 +174,7 @@ app/
     katalog/                                # catalog (sidebar filters + keyset load-more)
     design/[slug]/                          # product (SSR, generateMetadata, buy panel)
     handlekurv/ · kasse/ · ordre/[orderNo]/ # cart · checkout · confirmation
-    betaling/[orderNo]/                     # mock Dintero checkout
+    betaling/[orderNo]/                     # mock hosted checkout
     salgsbetingelser · angrerett(/skjema) · personvern · frakt   # legal
   admin/upload/                             # drag-and-drop publishing
   api/
@@ -183,11 +188,11 @@ lib/
   i18n.ts                                   # NO/EN catalog + routing helpers
   catalog.ts (server) · catalog-format.ts (client-safe)   # reads + shared types/helpers
   cart-totals.ts                            # shipping/VAT rules, payment methods, countries
-  dintero.ts · gelato.ts · fulfillment.ts   # provider clients + the fulfilment job
+  stripe.ts · payments.ts · gelato.ts · fulfillment.ts   # providers + the fulfilment job
   email.ts · company.ts                     # receipts/alerts + legal identity
   supabase/public.ts (anon) · supabase/server.ts (service-role)
   env.ts · admin-auth.ts · slug.ts · tokens.ts · money.ts · mockup.ts
-supabase/migrations/                        # 0001–0010
+supabase/migrations/                        # 0001–0011
 scripts/                                    # env.mjs + seed, db-sjekk, test-publisering, test-kasse, rydd-testdata
 vercel.json                                 # Gelato retry cron
 ```
@@ -206,6 +211,7 @@ vercel.json                                 # Gelato retry cron
 | 0008 | SKU collision again: `02e-design-colors.sql` redefined `generate_variants` from the 0001 version and reintroduced `left(slug,8)`, undoing 0004. Now `FC-<slug8>-<id6>-<COLOUR>-<SIZE>` |
 | 0009 | `create_order` could not see `gen_random_bytes`: pgcrypto lives in schema `extensions`, the function is `set search_path = public`. Checkout returned 500 on every order |
 | 0010 | `orders.gelato_status` had no default because `02g` added the column before 0007, so 0007's `add column if not exists` was a no-op. NULL never matches `claim_gelato_job`, so every paid order sat unsubmitted, silently |
+| 0011 | Dintero → Stripe: `dintero_session_id`/`dintero_transaction_id` renamed to `payment_session_id`/`payment_transaction_id`, and `mark_order_paid` redefined — a plpgsql body resolves column names at runtime, so it breaks the moment a column is renamed |
 
 The 0004 → 02e → 0008 sequence is worth remembering: the `02*.sql` handoff files
 each say they replace "the version in `02-data-model.sql`", which is 0001 — so any
@@ -240,10 +246,10 @@ of routing, validation and auth boundaries (see each step's notes in `SETUP.md`)
 The Sharp mockup pipeline and the pure logic were exercised directly.
 
 **Not exercised in this environment:** the Supabase-backed DB paths and the real
-Dintero/Gelato/Resend APIs (no DB or provider accounts here). Mock mode covers the
+Stripe/Gelato/Resend APIs (no DB or provider accounts here). Mock mode covers the
 DB-backed flow end to end once Supabase is configured.
 
-**Caveat:** the exact Dintero/Gelato request/response shapes and webhook signature
+**Caveat:** the exact Gelato request/response shapes and webhook signature
 schemes follow the handoff and should be reconfirmed against each provider's
 current docs during onboarding (flagged in `lib/dintero.ts`, `lib/gelato.ts` and
 the webhook routes).

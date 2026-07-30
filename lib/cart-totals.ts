@@ -7,7 +7,7 @@
  *   (05-norwegian-compliance.md, VAT_REGISTERED flag).
  *
  * These are display totals only. The authoritative re-pricing happens
- * server-side when the Dintero session is created (build-order step 4) — never
+ * server-side when the Stripe session is created (build-order step 4) — never
  * trust a price sent by the client.
  */
 
@@ -21,18 +21,17 @@ export const SHIPPING_COST: Record<ShippingMethod, number> = {
   express: 14900,
 };
 
-export type PaymentMethod = "vipps" | "klarna" | "card" | "wallet";
-export const PAYMENT_METHODS: PaymentMethod[] = [
-  "vipps",
-  "klarna",
-  "card",
-  "wallet",
-];
+/**
+ * Payment goes through Stripe Checkout, which does not offer Vipps. Vipps is the
+ * most common method in Norway, so leaving it out costs conversions — it needs its
+ * own integration against Vipps ePayment API. See lib/payments.ts for the seam.
+ */
+export type PaymentMethod = "klarna" | "card" | "wallet";
+export const PAYMENT_METHODS: PaymentMethod[] = ["card", "klarna", "wallet"];
 // 34×20px colour chip per method (01-design-spec.md §6).
 export const PAYMENT_CHIP: Record<PaymentMethod, string> = {
-  vipps: "#ff5b24",
-  klarna: "#ffb3c7",
   card: "#2a3446",
+  klarna: "#ffb3c7",
   wallet: "#c9c2b0",
 };
 

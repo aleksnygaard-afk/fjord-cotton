@@ -3,7 +3,8 @@ import { z } from "zod";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { allowedCountryCodes } from "@/lib/cart-totals";
-import { createSession, dinteroPaymentType } from "@/lib/dintero";
+import { createCheckoutSession } from "@/lib/stripe";
+import { providerFor } from "@/lib/payments";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/checkout/session (03-api-and-payments.md, step 2 of the flow).
  * Re-reads/​re-prices the cart server-side, inserts a pending order + line
- * snapshot, creates the Dintero session (or a mock one), and returns the
+ * snapshot, creates the Stripe Checkout session (or a mock one), and returns the
  * redirect URL. The client never sends prices — only variant ids and quantities.
  */
 
@@ -34,7 +35,10 @@ const Body = z.object({
   city: z.string().trim().min(1).max(80),
   country: z.enum(["NO", "SE", "DK", "FI"]),
   shippingMethod: z.enum(["pickup", "home", "express"]),
-  paymentMethod: z.enum(["vipps", "klarna", "card", "wallet"]),
+  // Speiler PAYMENT_METHODS i lib/cart-totals.ts. Vipps er ute: Stripe tilbyr den
+  // ikke, og en gammel klient som fortsatt sender "vipps" skal avvises med 422
+  // heller enn å havne i en kasse som ikke kan gjennomføre betalingen.
+  paymentMethod: z.enum(["card", "klarna", "wallet"]),
   consent: z.literal(true),
   locale: z.enum(["no", "en"]).default("no"),
 });
@@ -71,7 +75,7 @@ export async function POST(request: Request) {
     merged.set(it.variantId, (merged.get(it.variantId) ?? 0) + it.qty);
   }
 
-  // Server-side cart row — survives the redirect to Vipps and back (03).
+  // Server-side cart row — survives the redirect to Stripe and back (03).
   const cart = await db.from("carts").insert({}).select("id").single();
   if (cart.error || !cart.data) {
     return NextResponse.json(
@@ -127,66 +131,49 @@ export async function POST(request: Request) {
   const returnUrl = `${env.siteUrl}/${input.locale}/ordre/${orderNo}?t=${token}`;
 
   // ── Mock mode: simulate the hosted checkout locally ──
-  if (env.dinteroMock) {
+  if (env.stripeMock) {
     const redirectUrl = `${env.siteUrl}/${input.locale}/betaling/${orderNo}?t=${token}`;
     return NextResponse.json({ redirectUrl, orderNo, mock: true });
   }
 
-  // ── Real Dintero session ──
-  const vat = env.vatRegistered;
-  const vatOf = (gross: number) => (vat ? Math.round(gross * 0.2) : 0);
+  // ── Real hosted checkout ──
+  // Only Stripe today. providerFor() is where a future Vipps integration hooks in;
+  // an unrouted method is a type error there, not a checkout that fails at runtime.
+  const provider = providerFor(input.paymentMethod);
+  if (provider !== "stripe") {
+    return NextResponse.json(
+      { error: `payment provider '${provider}' is not implemented` },
+      { status: 501 },
+    );
+  }
 
-  const payload: Record<string, unknown> = {
-    url: {
-      return_url: returnUrl,
-      callback_url: `${env.siteUrl}/api/webhooks/dintero`,
-    },
-    order: {
-      amount: order.total,
-      currency: "NOK",
-      merchant_reference: orderNo,
-      vat_amount: order.vat_amount,
-      items: lines.map((l, i) => ({
-        id: l.sku,
-        line_id: String(i + 1),
-        description: `${l.title} — ${l.color_name} ${l.size_label}`,
-        quantity: l.qty,
-        amount: l.line_total,
-        vat_amount: vatOf(l.line_total),
-        vat: vat ? 25 : 0,
-      })),
-      shipping_option: {
-        id: input.shippingMethod,
-        amount: order.shipping,
-        vat_amount: vatOf(order.shipping),
-        vat: vat ? 25 : 0,
-        title: SHIPPING_LABEL[input.shippingMethod],
-        operator: input.shippingMethod === "pickup" ? "POSTEN" : "BRING",
-      },
-      billing_address: {
-        first_name: input.firstName,
-        last_name: input.lastName,
-        address_line: input.address1,
-        postal_code: input.postcode,
-        postal_place: input.city,
-        country: input.country,
-        email: input.email,
-        phone: input.phone || undefined,
-      },
-    },
-    configuration: {
-      vipps: { enabled: true },
-      klarna: { enabled: true },
-      payex: { card: { enabled: true } },
-      default_payment_type: dinteroPaymentType(input.paymentMethod),
-    },
-  };
-
+  // Line items come from the frozen order_lines that create_order() wrote, not from
+  // the cart: the customer pays exactly what the server priced. VAT is not sent as
+  // a separate field — prices are gross, and while VAT_REGISTERED is false there is
+  // no VAT component to declare (05-norwegian-compliance.md).
   try {
-    const session = await createSession(payload);
+    const session = await createCheckoutSession({
+      orderNo,
+      email: input.email,
+      locale: input.locale,
+      lines: lines.map((l) => ({
+        sku: l.sku,
+        title: l.title,
+        colorName: l.color_name,
+        sizeLabel: l.size_label,
+        qty: l.qty,
+        unitPrice: l.unit_price,
+      })),
+      shipping: order.shipping,
+      shippingLabel: SHIPPING_LABEL[input.shippingMethod],
+      returnUrl,
+      // Back to the checkout page, with the cart intact — the order stays pending.
+      cancelUrl: `${env.siteUrl}/${input.locale}/kasse?avbrutt=${orderNo}`,
+    });
+
     await db
       .from("orders")
-      .update({ dintero_session_id: session.id })
+      .update({ payment_session_id: session.id })
       .eq("order_no", orderNo);
     return NextResponse.json({ redirectUrl: session.url, orderNo });
   } catch (e) {

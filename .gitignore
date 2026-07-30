@@ -25,6 +25,14 @@ yarn-error.log*
 .env*.local
 .env.local
 
+# Provider credentials arrive as CSV exports from Dintero and Gelato. One was
+# committed in 11d8223 and only removed in c07e464, so it sat in the history of a
+# public repo. Patterns rather than a single filename: the export is named after the
+# account, so the next one has a different name.
+*credential*
+*.csv
+*.key
+
 # typescript
 *.tsbuildinfo
 

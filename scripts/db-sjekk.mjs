@@ -63,8 +63,32 @@ const NULL_UUID = '00000000-0000-0000-0000-000000000000';
 for (const [fn, args] of [
   ['generate_variants', { p_design: NULL_UUID }],
   ['design_colors', { p_design: NULL_UUID }],
-  ['claim_gelato_job', { p_order_no: 'FC-FINNES-IKKE' }],
   ['colors_for_contrast', { p: 'neutral' }],
+  ['catalog_facets', {}],
+  // Hele kassen og betalingen henger på disse tre. De manglet i basen mens alt
+  // annet var på plass, fordi 0006 ikke var kjørt — og ingenting oppdaget det før
+  // en POST mot /api/webhooks/dintero svarte 500 i produksjon.
+  ['next_order_no', {}],
+  // Alle 13 argumentene må med: PostgREST slår opp funksjoner på argumentnavn, så
+  // et delvis kall gir PGRST202 selv om funksjonen finnes. Tom kurv → exception
+  // P0001 'empty_cart', som er svaret vi vil ha — den kjørte.
+  ['create_order', {
+    p_cart: NULL_UUID,
+    p_email: 'sjekk@example.com',
+    p_first: 'Sjekk',
+    p_last: 'Sjekk',
+    p_phone: '',
+    p_address1: 'Gata 1',
+    p_postcode: '0001',
+    p_city: 'Oslo',
+    p_country: 'NO',
+    p_shipping_method: 'pickup',
+    p_payment_method: 'vipps',
+    p_consent: true,
+    p_vat_registered: false,
+  }],
+  ['mark_order_paid', { p_order_no: 'FC-FINNES-IKKE', p_transaction_id: null, p_amount: null, p_payment_method: null }],
+  ['claim_gelato_job', { p_order_no: 'FC-FINNES-IKKE' }],
 ]) {
   const r = await rpc(fn, args);
   // A missing function is 404 / PGRST202. Anything else means it ran — including a
@@ -81,8 +105,11 @@ const kolonner = [
   ['0007_fulfillment', 'orders', 'gelato_last_error'],
   ['0007_fulfillment', 'orders', 'gelato_submitted_at'],
   ['0007_fulfillment', 'orders', 'gelato_claimed_at'],
-  ['0006_orders', 'orders', 'gelato_order_id'],
-  ['0006_orders', 'orders', 'tracking_url'],
+  ['0006_orders', 'orders', 'access_token'],
+  ['0001_schema', 'orders', 'dintero_transaction_id'],
+  ['0001_schema', 'orders', 'gelato_order_id'],
+  ['0001_schema', 'orders', 'tracking_url'],
+  ['0001_schema', 'cart_lines', 'variant_id'],
   ['02e-design-colors', 'designs', 'contrast'],
   ['02e-design-colors', 'designs', 'allowed_colors'],
 ];

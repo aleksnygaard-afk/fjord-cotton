@@ -40,7 +40,7 @@ add to cart → pay → order paid → Gelato submitted → receipt — runs off
 ```bash
 npm install
 cp .env.example .env.local        # fill in Supabase; leave provider keys blank for mock mode
-# apply supabase/migrations/0001–0007 (SQL editor or `supabase db push`)
+# apply supabase/migrations/0001–0008 (SQL editor or `supabase db push`)
 npm run dev                        # http://localhost:3000 → /no
 ```
 
@@ -49,6 +49,34 @@ Upload a few designs at `/admin/upload` (status *Publisert nå*), then browse
 order → paid → fulfilment flow in mock mode — is in **`SETUP.md`**.
 
 Scripts: `npm run dev` · `npm run build` · `npm run start` · `npm run typecheck`.
+
+> `npm run` fails if the checkout path contains an `&` (as in `Fjord&Cotton`): npm's
+> Windows shim breaks on it with `MODULE_NOT_FOUND`. Either rename the folder or call
+> the binaries directly — `node node_modules/next/dist/bin/next dev`,
+> `node node_modules/typescript/bin/tsc --noEmit`.
+
+### Verification scripts
+
+Plain Node, no dependencies, no build step. They read `.env.local` themselves
+(`scripts/env.mjs`, same precedence as Next.js) and use the service-role key, so they
+hit whichever database `.env.local` points at.
+
+```bash
+node scripts/db-sjekk.mjs             # is the schema what the code expects?
+node scripts/test-publisering.mjs     # the publishing test list, needs a dev server
+node scripts/rydd-testdata.mjs        # list leftover test designs (--slett to remove)
+node scripts/seed-gelato-uids.mjs > uids.sql   # once, after the Gelato template exists
+```
+
+`db-sjekk.mjs` reads only: it prints the palette with its Gelato UID patterns, the
+size run, the functions the routes call, and the columns each migration adds — so a
+migration you forgot shows up there instead of as a 400 on a paid order.
+
+`test-publisering.mjs` drives the real routes: the middleware guard on `/admin`, the
+admin API's authentication, the four print files that must be rejected, publishing
+with the colour restriction, and that drafts stay out of the storefront. It creates
+its designs as `draft` (a published test shirt would be visible in the real shop) and
+deletes everything afterwards. Use `APP_URL=http://localhost:3100` for another port.
 
 ---
 
@@ -143,7 +171,8 @@ lib/
   email.ts · company.ts                     # receipts/alerts + legal identity
   supabase/public.ts (anon) · supabase/server.ts (service-role)
   env.ts · admin-auth.ts · slug.ts · tokens.ts · money.ts · mockup.ts
-supabase/migrations/                        # 0001–0007
+supabase/migrations/                        # 0001–0008
+scripts/                                    # env.mjs + seed, db-sjekk, test-publisering, rydd-testdata
 vercel.json                                 # Gelato retry cron
 ```
 
@@ -154,10 +183,16 @@ vercel.json                                 # Gelato retry cron
 | 0001 | Schema (verbatim from `02-data-model.sql`) |
 | 0002 | Reference seed — collections, themes, garment colours & sizes |
 | 0003 | Storage buckets + policies |
-| 0004 | Fix: `generate_variants` SKU collision (`left(slug,8)` → full slug) |
+| 0004 | Fix: `generate_variants` SKU collision (`left(slug,8)` → full slug) — later undone, see 0008 |
 | 0005 | `catalog_facets()` — counts + colours/sizes for the storefront |
 | 0006 | Orders: sequence, `create_order()`, `mark_order_paid()`, `access_token` |
 | 0007 | Fulfilment state, `garment_sizes.gelato_size_code`, `claim_gelato_job()` |
+| 0008 | SKU collision again: `02e-design-colors.sql` redefined `generate_variants` from the 0001 version and reintroduced `left(slug,8)`, undoing 0004. Now `FC-<slug8>-<id6>-<COLOUR>-<SIZE>` |
+
+The 0004 → 02e → 0008 sequence is worth remembering: the `02*.sql` handoff files
+each say they replace "the version in `02-data-model.sql`", which is 0001 — so any
+of them can silently revert a numbered migration. Check `generate_variants` after
+applying one.
 
 ---
 

@@ -15,47 +15,8 @@
 //
 // Node 18+. No dependencies.
 
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-
-/**
- * Minimal .env reader — enough for KEY=value files, no dependency on dotenv.
- * Same precedence as Next.js: a real environment variable wins over the file,
- * .env.local wins over .env, and within one file the last assignment wins.
- */
-function loadEnvFile(name) {
-  let text;
-  try {
-    text = readFileSync(join(ROOT, name), 'utf8');
-  } catch {
-    return; // absent is fine — the values may come from the environment
-  }
-  const seenHere = new Set();
-  for (const line of text.split(/\r?\n/)) {
-    const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/.exec(line);
-    if (!match) continue; // comment, blank line, or export syntax we don't need
-    const key = match[1];
-    let value = match[2].trim();
-    const quoted =
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"));
-    if (quoted && value.length >= 2) value = value.slice(1, -1);
-
-    if (!loaded.has(key) && process.env[key] !== undefined) continue; // real env wins
-    if (loaded.has(key) && !seenHere.has(key)) continue; // an earlier file wins
-
-    seenHere.add(key);
-    loaded.add(key);
-    process.env[key] = value;
-  }
-}
-
-const loaded = new Set();
-loadEnvFile('.env.local');
-loadEnvFile('.env');
+// env.mjs leser .env.local / .env og setter process.env. Presedensen ligger der.
+import './env.mjs';
 
 const API_KEY = process.env.GELATO_API_KEY;
 const TEMPLATE_RAW = process.env.GELATO_TEMPLATE_ID;

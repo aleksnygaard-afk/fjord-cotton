@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import type Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { constructEvent } from "@/lib/stripe";
+import { constructEvent, stripe } from "@/lib/stripe";
 import { submitGelatoForOrder } from "@/lib/fulfillment";
 import { sendReceipt } from "@/lib/email";
 
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     p_order_no: orderNo,
     p_transaction_id: transactionId,
     p_amount: session.amount_total, // øre, same unit as orders.total
-    p_payment_method: paymentMethodOf(session),
+    p_payment_method: await paymentMethodUsed(transactionId),
   });
   if (error) {
     // 500 so Stripe retries — a database blip must not lose a paid order.
@@ -120,13 +120,37 @@ export async function POST(request: Request) {
 }
 
 /**
- * Our own four-value vocabulary, not Stripe's. Left empty when we cannot tell:
- * mark_order_paid() then keeps whatever the customer chose at checkout rather than
- * overwriting it with a guess.
+ * What the customer actually paid with, in our own vocabulary (card / klarna /
+ * wallet). Requires one extra API call, and it is worth it.
+ *
+ * The obvious-looking source is wrong: `session.payment_method_types` is the list of
+ * methods the checkout *offered*, not the one that was used. Reading it recorded a
+ * card payment as Klarna — and payment_method reaches both the receipt and the
+ * bookkeeping export, so it has to be what happened, not what was on the menu.
+ *
+ * The charge knows. Apple/Google Pay arrive as a card with a wallet attached, which
+ * is our 'wallet'.
+ *
+ * Returns '' when it cannot be determined; mark_order_paid() then keeps the
+ * customer's own choice from checkout rather than overwriting it with a guess.
  */
-function paymentMethodOf(session: Stripe.Checkout.Session): string {
-  const types = session.payment_method_types ?? [];
-  if (types.includes("klarna")) return "klarna";
-  if (types.includes("card")) return "card";
-  return "";
+async function paymentMethodUsed(paymentIntentId: string): Promise<string> {
+  if (!paymentIntentId.startsWith("pi_")) return "";
+  try {
+    const pi = await stripe().paymentIntents.retrieve(paymentIntentId, {
+      expand: ["latest_charge"],
+    });
+    const charge = pi.latest_charge as Stripe.Charge | null;
+    const details = charge?.payment_method_details;
+    if (!details) return "";
+    if (details.type === "klarna") return "klarna";
+    if (details.type === "card") {
+      return details.card?.wallet ? "wallet" : "card";
+    }
+    return "";
+  } catch {
+    // Never fail the webhook over a label. The order is paid either way, and an
+    // empty string leaves the customer's checkout choice in place.
+    return "";
+  }
 }
